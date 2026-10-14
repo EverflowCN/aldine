@@ -196,7 +196,9 @@ export default function BrowserWorkspace() {
           if (progress.phase === 'repairing') setCacheHint('自动补全缺失的编译资源：' + (progress.file || ''));
           if (progress.phase === 'restored') setCacheHint('被清理的编译资源已自动恢复。');
           if (progress.phase === 'repair-failed') setCacheHint('缓存自动修复未完成，下次编译将尝试重新获取资源。');
-          if (progress.phase === 'persistence' && progress.granted) setCacheHint('浏览器已授权持久保留数据；手动清理网站数据仍会删除缓存。');
+          if (progress.phase === 'persistence') setCacheHint(progress.granted
+            ? '浏览器已允许持久存储；手动清理网站数据仍会删除缓存。'
+            : '浏览器尚未授予持久存储；资源仍会自动缓存，但可能被系统清理。');
         });
         // Emscripten can already hold TeX Live .data in IndexedDB before our new
         // Service Worker was introduced. Don't label that state as "downloading".
@@ -210,7 +212,7 @@ export default function BrowserWorkspace() {
         if (mounted) setCacheHint(cache.coreCached
           ? cache.persistent
             ? '已自动启用持久存储，编译资源完整，下次打开仅需初始化。'
-            : '编译资源完整且已缓存；浏览器正在自动申请持久存储。'
+            : '编译资源完整且已缓存；持久存储由浏览器决定。'
           : legacyPackageCached
             ? '基础宏包已保存在 IndexedDB；其他资源将在编译时自动缓存。'
             : '当前编译资源不完整，首次编译时自动补齐并保存到本机。');
