@@ -190,7 +190,14 @@ export default function BrowserWorkspace() {
     let mounted = true;
     cacheSetup.current = import(/* @vite-ignore */ BASE_PATH + '/busytex-cache.mjs')
       .then(async (lib) => {
-        const cache = await lib.prepareBusyTeXCache();
+        const cache = await lib.prepareBusyTeXCache((progress: { phase: string; granted?: boolean; file?: string; message?: string }) => {
+          if (!mounted) return;
+          if (progress.phase === 'evicted') setCacheHint('检测到本机编译资源被清理，正在自动恢复…');
+          if (progress.phase === 'repairing') setCacheHint('自动补全缺失的编译资源：' + (progress.file || ''));
+          if (progress.phase === 'restored') setCacheHint('被清理的编译资源已自动恢复。');
+          if (progress.phase === 'repair-failed') setCacheHint('缓存自动修复未完成，下次编译将尝试重新获取资源。');
+          if (progress.phase === 'persistence' && progress.granted) setCacheHint('浏览器已授权持久保留数据；手动清理网站数据仍会删除缓存。');
+        });
         // Emscripten can already hold TeX Live .data in IndexedDB before our new
         // Service Worker was introduced. Don't label that state as "downloading".
         let legacyPackageCached = false;
@@ -201,10 +208,12 @@ export default function BrowserWorkspace() {
           } catch { /* The editor remains usable without a cache-status probe. */ }
         }
         if (mounted) setCacheHint(cache.coreCached
-          ? 'XeLaTeX 引擎和基础宏包已缓存，下次打开只需初始化。'
+          ? cache.persistent
+            ? '已自动启用持久存储，编译资源完整，下次打开仅需初始化。'
+            : '编译资源完整且已缓存；浏览器正在自动申请持久存储。'
           : legacyPackageCached
-            ? '基础宏包已保存在 IndexedDB；编译引擎正使用本地缓存机制。'
-            : '首次编译需下载基础资源，下载后自动保存在当前浏览器。');
+            ? '基础宏包已保存在 IndexedDB；其他资源将在编译时自动缓存。'
+            : '当前编译资源不完整，首次编译时自动补齐并保存到本机。');
         return { ...cache, legacyPackageCached };
       }).catch(() => {
         if (mounted) setCacheHint('缓存功能不可用；编译仍可尝试。');
@@ -401,7 +410,7 @@ export default function BrowserWorkspace() {
         <a className="btn btn--small" href="https://github.com/EverflowCN/aldine" target="_blank" rel="noopener noreferrer">项目源码</a>
       </header>
       <div className="browser-ws__note">
-        <strong>本地模式</strong>：工程保存在本浏览器；编译资源首次下载后可缓存，再次打开仍会初始化引擎，但无需重复下载已缓存的资源。浏览器清理网站数据、隐私模式或存储空间不足会导致重新下载。支持 ZIP 导入/导出；暂不提供多人协作与 Git。
+        <strong>本地模式</strong>：工程保存在本浏览器；编译资源首次下载后可缓存，再次打开仍会初始化引擎，但无需重复下载已缓存的资源。自动检查缓存、尽力申请持久存储；如果被系统清理，下次打开自动检测并补齐。手动清理数据、无痕模式和浏览器权限限制仍可能删除缓存。支持 ZIP 导入/导出；暂不提供多人协作与 Git。
       </div>
       <div className="browser-ws__toolbar">
         <input aria-label="工程名称" className="browser-ws__name" value={workspace.name} onChange={(e) => update({ name: e.target.value.slice(0, 100) })} />
@@ -419,13 +428,7 @@ export default function BrowserWorkspace() {
       <div className="browser-ws__status" role="status">{state} {unsaved ? '· 保存中' : '· 已保存'}</div>
       <div className="browser-ws__cache" data-testid="busytex-cache-status">
         <span>{cacheHint}</span>
-        <button type="button" className="btn btn--small" title="向浏览器请求保留本网站缓存（浏览器可能拒绝）" onClick={async () => {
-          try {
-            const api = await import(/* @vite-ignore */ BASE_PATH + '/busytex-cache.mjs');
-            const ok = await api.requestBusyTeXPersistentStorage();
-            setCacheHint(ok ? '浏览器已允许持久保留资源缓存。' : '当前浏览器未授予永久保留权限；已缓存内容仍可能随空间策略被清理。');
-          } catch { setCacheHint('当前浏览器不支持申请持久保留缓存。'); }
-        }}>保留缓存</button>
+        <span className="browser-ws__cache-auto" title="自动验证缺失文件、请求浏览器授予持久存储并在下次访问时恢复被清理的缓存；浏览器可能拒绝授权。">自动缓存 · 无需操作</span>
       </div>
       <div className="browser-ws__body">
         <aside className="browser-ws__sidebar">
