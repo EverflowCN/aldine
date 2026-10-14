@@ -256,7 +256,7 @@ export default function BrowserWorkspace() {
       const lib = await zipLibrary();
       const files: Record<string, Uint8Array> = {};
       for (const file of workspace.files) {
-        files[file.path] = isText(file) ? new TextEncoder().encode(file.content) : file.content;
+        files[file.path] = typeof file.content === 'string' ? new TextEncoder().encode(file.content) : new Uint8Array(file.content);
       }
       const zip = lib.zipSync(files, { level: 6 }) as Uint8Array;
       saveAs(new Blob([new Uint8Array(zip)], { type: 'application/zip' }), (workspace.name || 'everflow-project').replace(/[\\/:*?"<>|]/g, '_') + '.zip');
