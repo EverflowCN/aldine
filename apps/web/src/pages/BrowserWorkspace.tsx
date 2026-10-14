@@ -473,11 +473,11 @@ export default function BrowserWorkspace() {
           ['缺失字体', entry.missfontlog], ['标准错误', entry.stderr],
           ['标准输出', entry.stdout]
         ] as Array<[string, string | undefined]>) {
-          if (value?.trim()) parts.push('--- ' + label + ' ---\\n' + value.slice(-120000));
+          if (value?.trim()) parts.push('--- ' + label + ' ---\n' + value.slice(-120000));
         }
-        return parts.join('\\n');
-      }).join('\\n\\n');
-      const diagnosticLog = [result.log, detailed].filter(Boolean).join('\\n\\n') || '(编译器未返回日志)';
+        return parts.join('\n');
+      }).join('\n\n');
+      const diagnosticLog = [result.log, detailed].filter(Boolean).join('\n\n') || '(编译器未返回日志)';
       setErrorLog(diagnosticLog);
       if (!result.success || !result.pdf?.length) {
         setCompileStatus('error');
