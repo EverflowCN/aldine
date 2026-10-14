@@ -146,6 +146,14 @@ export default function BrowserWorkspace() {
   const [state, setState] = useState('正在读取本地工程…');
   const [errorLog, setErrorLog] = useState('');
   const [allowPackages, setAllowPackages] = useState(true);
+  // GitHub-hosted optional TeX Live bundles. The extra 528 MiB is NEVER
+  // downloaded on first visit unless the user explicitly selects a tier.
+  const [resourceTier, setResourceTier] = useState<'basic' | 'recommended' | 'extra'>(() => {
+    try {
+      const v = localStorage.getItem('everflow.busytex.resourceTier');
+      return v === 'recommended' || v === 'extra' ? v : 'basic';
+    } catch { return 'basic'; }
+  });
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [unsaved, setUnsaved] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -388,10 +396,23 @@ export default function BrowserWorkspace() {
       ).catch(() => {});
       setState('编译中：' + workspace.engine + '（计算在你的浏览器内进行）…');
       const others = workspace.files.filter((f) => f.path !== workspace.rootFile);
+      // The pinned bundles are served by zuotiben.top itself via GitHub Pages.
+      // The original on-demand remote endpoint remains an optional fallback for
+      // packages outside TeX Live Basic/Recommended/Extra.
+      const bundles = resourceTier === 'extra'
+        ? [BUSYTEX_ASSETS + '/texlive-recommended.js', BUSYTEX_ASSETS + '/texlive-extra.js']
+        : resourceTier === 'recommended'
+          ? [BUSYTEX_ASSETS + '/texlive-recommended.js'] : [];
+      if (bundles.length) setState(
+        resourceTier === 'extra'
+          ? '正在加载 GitHub 托管的推荐与扩展宏包（首次约 528 MB，仅当前设备下载）…'
+          : '正在加载 GitHub 托管的推荐宏包（首次约 192 MB，仅当前设备下载）…'
+      );
       const result = await engineRef.current[workspace.engine].compile({
         mainTexPath: workspace.rootFile,
         input: main.content,
         additionalFiles: others,
+        dataPackagesJs: bundles.length ? bundles : undefined,
         rerun: true,
         verbose: 'info',
         remoteEndpoint: allowPackages ? PACKAGE_SERVICE : undefined
@@ -446,6 +467,18 @@ export default function BrowserWorkspace() {
           <option value="xelatex">XeLaTeX</option>
           <option value="pdflatex">pdfLaTeX</option>
           <option value="lualatex">LuaLaTeX</option>
+        </select>
+        <label className="browser-aldine__tool-label" htmlFor="browser-bundle">本地宏包</label>
+        <select id="browser-bundle" aria-label="TeX Live 资源包" className="browser-aldine__engine"
+          disabled={busy} value={resourceTier}
+          onChange={(e) => {
+            const next = e.target.value as 'basic' | 'recommended' | 'extra';
+            setResourceTier(next);
+            try { localStorage.setItem('everflow.busytex.resourceTier', next); } catch {}
+          }}>
+          <option value="basic">基础（约 90 MB）</option>
+          <option value="recommended">推荐（再加 192 MB）</option>
+          <option value="extra">扩展（再加约 518 MB）</option>
         </select>
         <button className="btn btn--ghost browser-aldine__minor" onClick={() => setSidebarHidden((v) => !v)}>
           {sidebarHidden ? '显示文件' : '隐藏文件'}
@@ -519,7 +552,7 @@ export default function BrowserWorkspace() {
                 <input type="checkbox" checked={allowPackages} onChange={(e) => setAllowPackages(e.target.checked)} />
                 自动获取缺失宏包
               </label>
-              <p>当前项目自动存储在本机浏览器。建议定期「导出 ZIP」备份。</p>
+              <p>编译引擎和基础／推荐／扩展宏包来自本站 GitHub Pages。选择较大资源包会增加下载和内存占用，超出这些资源包的字体或宏包仍需按需联网；完整 TeX Live 尚未离线镜像。工程只存储在本机浏览器，请定期导出 ZIP。</p>
             </div>
           </div>
         </aside>
