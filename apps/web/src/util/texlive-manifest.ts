@@ -46,20 +46,34 @@ export async function assessTeXLiveCoverage(
   const localPackages = new Set(
     localPaths.filter(p => /\.sty$/i.test(p)).map(p => p.split('/').pop()!.slice(0, -4).toLowerCase())
   );
+  // For Everflow, the Pages build also indexes literal paths installed
+  // inside all three pinned TeX Live collections. This catches real packages
+  // whose declarations are absent from the upstream Provides-only manifest.
+  let everflowFiles = new Map<string, TeXLiveTier>();
+  if (localPaths.some(p => /(^|\\/)Everflow-(Exam|Book|Public)\.tex$/i.test(p))) {
+    try {
+      const response = await fetch('/latex/deploy/everflow-package-coverage.json', { cache: 'no-store' });
+      if (response.ok) {
+        const index = await response.json() as { source_lists?: string[]; packages?: Array<{name: string; tier: TeXLiveTier}> };
+        if (index.source_lists?.includes('TeX Live installed filenames') && Array.isArray(index.packages)) {
+          everflowFiles = new Map(index.packages.map(item => [item.name.toLowerCase(), item.tier]));
+        }
+      }
+    } catch { /* Online manifests remain a best-effort hint, not a compile prerequisite. */ }
+  }
   const matches = packages.map(name => {
     const normalized = name.toLowerCase();
     const isLocal = localPackages.has(normalized) || localPaths.some(p => p.toLowerCase() === normalized + '.sty' || p.toLowerCase().endsWith('/' + normalized + '.sty'));
     const i = catalogs.findIndex(c => c.has(normalized));
-    return {
-      name,
-      tier: isLocal ? 'local' as const : i >= 0 ? COLLECTIONS[i].tier : 'unlisted' as const
-    };
+    const tier = isLocal ? 'local' as const
+      : everflowFiles.get(normalized) || (i >= 0 ? COLLECTIONS[i].tier : 'unlisted' as const);
+    return { name, tier };
   });
   const byTier: Record<TeXLiveTier, number> = { basic: 0, recommended: 0, extra: 0, unlisted: 0, local: 0 };
   matches.forEach(item => { byTier[item.tier]++; });
   const suggested = byTier.extra ? 'extra' : byTier.recommended ? 'recommended' : 'basic';
   return {
     matches, byTier, suggested,
-    note: '根据官方 \\ProvidesPackage 声明估计归属。未列出不代表必然缺失：某些包由依赖隐式提供、文件名和声明名不同、或需按需远程补充。字体未纳入此清单。',
+    note: '根据官方 TeX Live 已安装文件索引（Everflow）与 \\ProvidesPackage 声明对照。仍未列出不代表必然缺失；字体族解析、运行内存和 XeLaTeX 实际兼容性仍须测试。',
   };
 }
