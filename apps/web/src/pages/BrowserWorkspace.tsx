@@ -151,6 +151,12 @@ export default function BrowserWorkspace() {
   const [showLog, setShowLog] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [zoom, setZoom] = useState(1);
+  // PDF.js can omit subset-embedded Chinese CID glyphs (e.g. FandolSong).
+  // Chromium/Edge native PDFium is the safer default for XeLaTeX CJK output.
+  const [pdfRenderer, setPdfRenderer] = useState<'native' | 'pdfjs'>(() => {
+    try { return localStorage.getItem('aldine.local.pdfRenderer') === 'pdfjs' ? 'pdfjs' : 'native'; }
+    catch { return 'native'; }
+  });
   const [compileStatus, setCompileStatus] = useState<'idle' | 'compiling' | 'ok' | 'error'>('idle');
   const [pdfWidth, setPdfWidth] = useState(() => Math.max(330, Math.round(window.innerWidth * .40)));
   const [resizing, setResizing] = useState(false);
@@ -420,6 +426,10 @@ export default function BrowserWorkspace() {
   const displayFiles = [...workspace.files].sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'));
   const changePdfWidth = (w: number) => setPdfWidth(clampPdf(w));
   const statusMessage = state;
+  const choosePdfRenderer = (renderer: 'native' | 'pdfjs') => {
+    setPdfRenderer(renderer);
+    try { localStorage.setItem('aldine.local.pdfRenderer', renderer); } catch { /* private mode */ }
+  };
   return (
     <div className="editor-shell browser-aldine" data-testid="editor-shell">
       {/* Keep Aldine's toolbar, panes, CodeMirror editor and PDF renderer native.
@@ -563,18 +573,36 @@ export default function BrowserWorkspace() {
               {compileStatus === 'compiling' ? '编译中' : compileStatus === 'ok' ? '已编译' : compileStatus === 'error' ? '编译失败' : '尚未编译'}
             </span>
             <span className="toolbar__spacer" />
-            <div className="zoom" aria-label="调整 PDF 缩放">
+            <label className="browser-aldine__preview-mode" title="浏览器内核更适合预览含中文字体的 XeLaTeX PDF">
+              <span>预览模式</span>
+              <select aria-label="PDF 预览模式" value={pdfRenderer}
+                onChange={(e) => choosePdfRenderer(e.target.value as 'native' | 'pdfjs')}>
+                <option value="native">浏览器（中文兼容）</option>
+                <option value="pdfjs">Aldine PDF.js</option>
+              </select>
+            </label>
+            {pdfRenderer === 'pdfjs' && <div className="zoom" aria-label="调整 PDF 缩放">
               <button className="btn btn--small" aria-label="缩小 PDF" onClick={() => setZoom((v) => Math.max(.5, v - .1))}>−</button>
               <span className="zoom__label">{Math.round(zoom * 100)}%</span>
               <button className="btn btn--small" aria-label="放大 PDF" onClick={() => setZoom((v) => Math.min(3, v + .1))}>＋</button>
-            </div>
+            </div>}
             {previewUrl && <a className="btn btn--small" href={previewUrl}
               download={(workspace.name || 'everflow').replace(/[\\/:*?"<>|]/g, '-') + '.pdf'}>下载 PDF</a>}
             <button className="btn btn--ghost btn--small" onClick={() => setShowLog((v) => !v)}>日志</button>
           </div>
-          <PdfPane pdfUrl={previewUrl} branch="local" status={compileStatus} zoom={zoom}
-            locale="zh" stale={compileStatus === 'error' && !!previewUrl} ready={ready} hasTex={workspace.files.some(f => /\.tex$/i.test(f.path))}
-            onFirstOpen={() => { /* No surprise 120MB WASM download until user clicks 编译. */ }} />
+          {pdfRenderer === 'native' && previewUrl
+            ? <iframe key={previewUrl} className="browser-aldine__native-pdf"
+                title="浏览器原生 PDF 预览（兼容中文嵌入字体）" data-testid="pdf-native"
+                src={previewUrl} />
+            : <PdfPane pdfUrl={previewUrl} branch="local" status={compileStatus} zoom={zoom}
+                locale="zh" stale={compileStatus === 'error' && !!previewUrl} ready={ready}
+                hasTex={workspace.files.some(f => /\.tex$/i.test(f.path))}
+                onFirstOpen={() => { /* No surprise 120MB WASM download until user clicks 编译. */ }} />}
+          {pdfRenderer === 'native' && previewUrl && (
+            <div className="browser-aldine__pdfhint" role="note">
+              中文文字由浏览器 PDF 内核渲染。如果当前浏览器仍不显示，请点击「下载 PDF」使用系统阅读器。
+            </div>
+          )}
         </section>
       </div>
       {showLog && <section className="browser-aldine__log-panel" aria-label="编译日志">
