@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { withBase } from '../basePath';
 import { api, ApiError, ProjectSummary, RemoteInfo, TemplateCategory, TemplateInfo, TemplateRepoState } from '../api';
 import { useToast } from '../components/Toast';
 import { useDialogs } from '../components/Dialogs';
@@ -303,6 +304,7 @@ export default function Home() {
                 <button className="btn btn--small" data-testid="logout" onClick={async () => { await api.logout(); setUser(null); }}>Sign out</button>
               </span>
             )}
+            <a className="btn" href={withBase('/?local=1')} data-testid="browser-local-mode" title="Compile LaTeX directly in your browser without an Aldine backend">浏览器编译 · 免费</a>
             <button className="btn" data-testid="import-zip" onClick={() => zipInput.current?.click()}>Import ZIP</button>
             <input ref={zipInput} type="file" accept=".zip" hidden data-testid="import-input" aria-hidden="true" tabIndex={-1}
               onChange={async (e) => { if (e.target.files?.[0]) await importZip(e.target.files[0]); e.target.value = ''; }} />
@@ -321,8 +323,12 @@ export default function Home() {
           <div className="empty"><div className="spinner" style={{ margin: '0 auto' }} /></div>
         ) : loadFailed ? (
           <div className="empty">
-            <p style={{ margin: '0 0 16px' }}>Couldn’t reach the server to load your projects.</p>
-            <button className="btn btn--primary" onClick={load}>Try again</button>
+            <p style={{ margin: '0 0 9px' }}>当前未连接 Aldine 服务器。</p>
+            <p style={{ margin: '0 0 17px', color: 'var(--text-2)', fontSize: 'var(--text-s)' }}>可使用浏览器 WebAssembly 在本机编译 PDF，不需要下载或安装 TeX Live。文件只存储在当前浏览器。</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <a className="btn btn--primary" href={withBase('/?local=1')}>进入本地 LaTeX 工作区</a>
+              <button className="btn" onClick={load}>重试连接服务器</button>
+            </div>
           </div>
         ) : projects.length === 0 ? (
           <div className="empty" data-testid="projects-empty">
@@ -431,7 +437,7 @@ export default function Home() {
       {importFrom && (
         <RemoteImport key={importFrom} provider={importFrom} onClose={() => setImportFrom(null)} onImported={(id) => navigate(`/p/${id}`)} />
       )}
-      {showOnboarding && (
+      {showOnboarding && !loadFailed && (
         <Onboarding onNew={() => setCreating(true)} onRemote={setImportFrom} remotes={remotes.map((r) => r.id)} onImportZip={importZip} onClose={dismissOnboarding} />
       )}
 
