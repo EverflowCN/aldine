@@ -6,6 +6,8 @@ import { IconChevronLeft } from '../components/Icons';
 import { toggleTheme } from '../theme';
 import { scanLatexDependencies } from '../util/latex-preflight';
 import type { PreflightResult } from '../util/latex-preflight';
+import { assessTeXLiveCoverage } from '../util/texlive-manifest';
+import type { TeXLiveCoverage } from '../util/texlive-manifest';
 import './BrowserWorkspace.css';
 
 // Browser-only projects deliberately bypass Aldine's server-only API, auth and Yjs.
@@ -161,6 +163,8 @@ export default function BrowserWorkspace() {
   const [showLog, setShowLog] = useState(false);
   const [showPreflight, setShowPreflight] = useState(false);
   const [preflight, setPreflight] = useState<PreflightResult | null>(null);
+  const [coverage, setCoverage] = useState<TeXLiveCoverage | null>(null);
+  const [coverageState, setCoverageState] = useState('尚未查询本站 TeX Live 资源目录。');
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [zoom, setZoom] = useState(1);
   // PDF.js can omit subset-embedded Chinese CID glyphs (e.g. FandolSong).
@@ -358,10 +362,21 @@ export default function BrowserWorkspace() {
   function auditWorkspace(): void {
     const report = scanLatexDependencies(workspace.files, workspace.rootFile);
     setPreflight(report);
+    setCoverage(null);
+    setCoverageState('正在对照 GitHub Pages 上的 Basic、Recommended、Extra 三套宏包目录…');
     setShowPreflight(true);
     setShowLog(false);
     setState('静态依赖检查完成：' + report.packages.length + ' 个宏包、' +
       report.fontNames.length + ' 个字体候选、' + report.imageCount + ' 张图片；实际兼容性仍须编译验证。');
+    void assessTeXLiveCoverage(report.packages, BUSYTEX_ASSETS, workspace.files.map(f => f.path))
+      .then((data) => {
+        setCoverage(data);
+        setCoverageState(data.byTier.unlisted
+          ? '有 ' + data.byTier.unlisted + ' 个宏包未在三套目录中直接找到，需查看日志或按需补充。'
+          : '已完成三档 GitHub 托管宏包归属核对；实际是否可编译仍需运行 XeLaTeX。');
+      }).catch((e: unknown) => {
+        setCoverageState('无法加载 GitHub Pages 上的宏包目录：' + String(e));
+      });
   }
 
   async function compile(): Promise<void> {
@@ -672,6 +687,25 @@ export default function BrowserWorkspace() {
           </div>}
           <div className="browser-aldine__preflight-row">
             <b>宏包依赖</b><span>{preflight.packages.join('、') || '未声明宏包'}</span>
+          </div>
+          <div className="browser-aldine__preflight-row" data-testid="preflight-coverage">
+            <b>GitHub 宏包归属</b>
+            <div>
+              <p>{coverageState}</p>
+              {coverage && <>
+                <div className="browser-aldine__preflight-summary">
+                  <span>Basic：{coverage.byTier.basic}</span>
+                  <span>Recommended：{coverage.byTier.recommended}</span>
+                  <span>Extra：{coverage.byTier.extra}</span>
+                  <span>工程自带：{coverage.byTier.local}</span>
+                  <span>尚未列出：{coverage.byTier.unlisted}</span>
+                </div>
+                <p>{coverage.note}</p>
+                {coverage.matches.filter(item => item.tier !== 'basic' && item.tier !== 'local').length > 0 &&
+                  <p>{coverage.matches.filter(item => item.tier !== 'basic' && item.tier !== 'local')
+                    .map(item => item.name + '（' + ({ recommended: '推荐', extra: '扩展', unlisted: '目录外' } as Record<string,string>)[item.tier] + '）').join('、')}</p>}
+              </>}
+            </div>
           </div>
           <div className="browser-aldine__preflight-row">
             <b>字体候选</b><span>{preflight.fontNames.join('、') || '未指定字体'}</span>
