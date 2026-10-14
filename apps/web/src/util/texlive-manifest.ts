@@ -48,7 +48,7 @@ export async function assessTeXLiveCoverage(
   );
   const matches = packages.map(name => {
     const normalized = name.toLowerCase();
-    const isLocal = localPackages.has(normalized) || localPaths.some(p => p.toLowerCase() === normalized + '.sty');
+    const isLocal = localPackages.has(normalized) || localPaths.some(p => p.toLowerCase() === normalized + '.sty' || p.toLowerCase().endsWith('/' + normalized + '.sty'));
     const i = catalogs.findIndex(c => c.has(normalized));
     return {
       name,
