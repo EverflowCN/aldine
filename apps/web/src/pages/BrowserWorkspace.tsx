@@ -8,6 +8,8 @@ import { scanLatexDependencies } from '../util/latex-preflight';
 import type { PreflightResult } from '../util/latex-preflight';
 import { assessTeXLiveCoverage } from '../util/texlive-manifest';
 import type { TeXLiveCoverage } from '../util/texlive-manifest';
+import { diagnoseCompileLog } from '../util/latex-compile-diagnostics';
+import type { CompileIssue } from '../util/latex-compile-diagnostics';
 import './BrowserWorkspace.css';
 
 // Browser-only projects deliberately bypass Aldine's server-only API, auth and Yjs.
@@ -162,6 +164,7 @@ export default function BrowserWorkspace() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [unsaved, setUnsaved] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [compileIssues, setCompileIssues] = useState<CompileIssue[]>([]);
   const [showPreflight, setShowPreflight] = useState(false);
   const [preflight, setPreflight] = useState<PreflightResult | null>(null);
   const [coverage, setCoverage] = useState<TeXLiveCoverage | null>(null);
@@ -399,6 +402,7 @@ export default function BrowserWorkspace() {
     setShowLog(true);
     setState('正在检查编译资源缓存…');
     setErrorLog('');
+    setCompileIssues([]);
     const started = performance.now();
     try {
       if (!runnerRef.current || !engineRef.current) {
@@ -481,6 +485,7 @@ export default function BrowserWorkspace() {
       }).join('\n\n');
       const diagnosticLog = [result.log, detailed].filter(Boolean).join('\n\n') || '(编译器未返回日志)';
       setErrorLog(diagnosticLog);
+      setCompileIssues(diagnoseCompileLog(diagnosticLog));
       if (!result.success || !result.pdf?.length) {
         setCompileStatus('error');
         const hint = /(?:file .* not found|cannot find file|kpse_remote)/i.test(diagnosticLog)
@@ -503,6 +508,7 @@ export default function BrowserWorkspace() {
     } catch (err: unknown) {
       setCompileStatus('error');
       setErrorLog(err instanceof Error ? err.stack || err.message : String(err));
+      setCompileIssues(diagnoseCompileLog(err instanceof Error ? err.stack || err.message : String(err)));
       const reason = err instanceof Error ? err.message : String(err);
       setState(/Compilation timeout|超时/i.test(reason)
         ? '复杂工程编译超过浏览器限定时间。可精简题源后重试；TeX Live 资源未全部缓存时可能更加耗时。'
@@ -774,6 +780,14 @@ export default function BrowserWorkspace() {
           <span className="toolbar__spacer" />
           <button className="btn btn--ghost btn--small" onClick={() => setShowLog(false)}>收起</button>
         </div>
+        {compileIssues.length > 0 && <div className="browser-aldine__diagnostics" data-testid="compile-issues">
+          <strong>诊断提示（依据编译日志推断）</strong>
+          {compileIssues.map((issue, i) => <div key={i}
+              className={'browser-aldine__diagnostic browser-aldine__diagnostic--' + issue.level}>
+              <b>{issue.level === 'error' ? '错误' : '注意'} · {issue.title}</b>
+              <span>{issue.advice}</span>
+            </div>)}
+        </div>}
         <pre data-testid="browser-compile-log">{errorLog || '尚无编译日志。'}</pre>
       </section>}
       <input ref={uploadRef} type="file" multiple hidden onChange={async (e) => {
