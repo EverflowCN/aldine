@@ -432,7 +432,7 @@ export default function BrowserWorkspace() {
           setCacheHint(cache.coreCached ? '编译资源已保存在本机浏览器中。' : '编译资源缓存写入中或被浏览器存储策略限制。')
         )
       ).catch(() => {});
-      setState('编译中：' + workspace.engine + '（计算在你的浏览器内进行）…');
+      setState('编译中：' + workspace.engine + '（计算在你的浏览器内进行；大型工程允许更长编译时间）…');
       const others = workspace.files.filter((f) => f.path !== workspace.rootFile);
       // The pinned bundles are served by zuotiben.top itself via GitHub Pages.
       // The original on-demand remote endpoint remains an optional fallback for
@@ -450,6 +450,11 @@ export default function BrowserWorkspace() {
         mainTexPath: workspace.rootFile,
         input: main.content,
         additionalFiles: others,
+        // A full Everflow Exam/Book PDF can exceed BusyTeX's 3-minute
+        // default during first-use font/TeX Live loading and multi-pass runs.
+        // Grant ONLY large projects up to 12 minutes; small tests remain 3m.
+        compileTimeoutMs: workspace.files.length > 30 || /Everflow-(Exam|Book|Public)\.tex$/i.test(workspace.rootFile)
+          ? 12 * 60 * 1000 : 3 * 60 * 1000,
         dataPackagesJs: bundles.length ? bundles : undefined,
         rerun: true,
         verbose: 'info',
