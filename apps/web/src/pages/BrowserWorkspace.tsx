@@ -312,7 +312,13 @@ export default function BrowserWorkspace() {
       }
       const candidates = files.filter((f) => /\.tex$/i.test(f.path) && isText(f));
       if (!candidates.length) throw new Error('ZIP 中没有 .tex 文件');
-      // Everflow ZIPs ship many helper .tex files and 3 real entrypoints.\n      // Prefer Exam explicitly instead of accidentally compiling a helper.\n      const root = candidates.find((f) => /(^|\/)Everflow-Exam\.tex$/i.test(f.path))\n        || candidates.find((f) => /(^|\/)main\.tex$/i.test(f.path))\n        || candidates.find((f) => /(^|\/)root\.tex$/i.test(f.path))\n        || candidates.find((f) => /(^|\/)Everflow-(Book|Public)\.tex$/i.test(f.path))\n        || candidates.slice().sort((a,b) => a.path.split('/').length - b.path.split('/').length)[0];
+      // Everflow ZIPs ship many helper .tex files and 3 real entrypoints.
+      // Prefer Exam explicitly instead of accidentally compiling a helper.
+      const root = candidates.find((f) => /(^|\/)Everflow-Exam\.tex$/i.test(f.path))
+        || candidates.find((f) => /(^|\/)main\.tex$/i.test(f.path))
+        || candidates.find((f) => /(^|\/)root\.tex$/i.test(f.path))
+        || candidates.find((f) => /(^|\/)Everflow-(Book|Public)\.tex$/i.test(f.path))
+        || candidates.slice().sort((a,b) => a.path.split('/').length - b.path.split('/').length)[0];
       setWorkspace({ name: input.name.replace(/\.zip$/i, '').slice(0, 100), engine: 'xelatex', rootFile: root.path, files });
       setActive(root.path);
       setErrorLog('');
