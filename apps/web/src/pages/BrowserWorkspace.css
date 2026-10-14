@@ -126,3 +126,18 @@
  .browser-aldine__preview-mode span{display:none;}
  .browser-aldine__native-pdf{min-height:300px;}
 }
+
+/* Imported Everflow project preflight. No red-vs-green-only status signalling. */
+.browser-aldine__preflight{display:flex;flex-direction:column;flex:none;max-height:42vh;min-height:130px;border-top:1px solid var(--hairline);background:var(--bg-panel);font-size:12px}
+.browser-aldine__preflight-content{overflow:auto;padding:10px 17px;display:flex;flex-direction:column;gap:9px;color:var(--text-2);line-height:1.65}
+.browser-aldine__preflight-summary{display:flex;flex-wrap:wrap;gap:7px}
+.browser-aldine__preflight-summary span{background:var(--bg-inset);border:1px solid var(--hairline);border-radius:5px;padding:2px 7px;font-size:11px;color:var(--text)}
+.browser-aldine__preflight-row{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;overflow-wrap:anywhere}
+.browser-aldine__preflight-row b{color:var(--text);font-weight:650}
+.browser-aldine__preflight-issue{display:grid;grid-template-columns:40px minmax(0,1fr);gap:7px;background:var(--bg-inset);padding:5px 8px;border-radius:5px;overflow-wrap:anywhere}
+.browser-aldine__preflight-issue b{color:var(--text)}
+.browser-aldine__preflight-issue--error{border-left:3px solid #c26040}
+.browser-aldine__preflight-issue--warning{border-left:3px solid #b68f35}
+.browser-aldine__preflight-issue--info{border-left:3px solid #577d9d}
+.browser-aldine__preflight-content>p{font-size:11px;margin:1px 0 5px;color:var(--text-3)}
+@media(max-width:760px){.browser-aldine__preflight{max-height:47vh}.browser-aldine__preflight-row{grid-template-columns:1fr;gap:0}}
