@@ -684,7 +684,7 @@ export default function BrowserWorkspace() {
             <span>{preflight.packages.length} 个直接依赖宏包</span>
             <span>{preflight.fontNames.length} 个字体候选</span>
             <span>{preflight.imageCount} 个图像资源</span>
-            <span>建议资源：{preflight.recommendedTier === 'recommended' ? '推荐' : '基础'}</span>
+            <span>建议资源：{coverage ? (coverage.suggested === 'extra' ? '扩展' : coverage.suggested === 'recommended' ? '推荐' : '基础') : '索引核对中'}</span>
           </div>
           {preflight.entrypoints.length > 0 && <div className="browser-aldine__preflight-row">
             <b>编译入口</b><span>{preflight.entrypoints.join('　|　')}</span>
