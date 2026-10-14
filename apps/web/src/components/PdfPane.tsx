@@ -11,6 +11,8 @@ export interface PdfPaneHandle {
 
 interface Props {
   pdfUrl: string | null;
+  /** Use native Simplified Chinese labels in offline/browser mode. */
+  locale?: 'en' | 'zh';
   /** The branch whose PDF is shown; a change empties the pane (see below). */
   branch?: string;
   status: 'idle' | 'compiling' | 'ok' | 'error';
@@ -30,7 +32,7 @@ interface Props {
   onInverse?(page: number, x: number, y: number): void;
 }
 
-const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane({ pdfUrl, branch, status, zoom = 1, hasErrors = false, stale = false, ready = true, hasTex = true, onFirstOpen, onInverse }, ref) {
+const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane({ pdfUrl, locale = 'en', branch, status, zoom = 1, hasErrors = false, stale = false, ready = true, hasTex = true, onFirstOpen, onInverse }, ref) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [rendered, setRendered] = useState(false);
@@ -224,22 +226,22 @@ const PdfPane = forwardRef<PdfPaneHandle, Props>(function PdfPane({ pdfUrl, bran
   return (
     <div className="pdf-pane" ref={scrollRef} data-testid="pdf-pane">
       {stale && rendered && (
-        <div className="pdf-stale" data-testid="pdf-stale">Preview is from the last successful typeset</div>
+        <div className="pdf-stale" data-testid="pdf-stale">{locale === 'zh' ? '预览来自上次成功编译' : 'Preview is from the last successful typeset'}</div>
       )}
       <div className="pdf-pane__inner" ref={innerRef} onDoubleClick={handleDblClick} title={onInverse ? 'Double-click to jump to source' : undefined} />
       {!rendered && (
         <div className="pdf-empty">
           {status === 'compiling' ? (
-            <><span className="spinner" /><p>Typesetting your document…</p></>
+            <><span className="spinner" /><p>{locale === 'zh' ? '正在编译 LaTeX 文档…' : 'Typesetting your document…'}</p></>
           ) : status === 'error' ? (
             // Only blame the document when there are errors to fix — a failed
             // run without parsed errors (missing root, server trouble) isn't
             // the user's LaTeX.
-            <p>{hasErrors ? 'Fix the errors on the left, then typeset again.' : 'Typesetting didn’t finish — open the log for details.'}</p>
+            <p>{hasErrors ? (locale === 'zh' ? '请修复左侧错误后重新编译。' : 'Fix the errors on the left, then typeset again.') : (locale === 'zh' ? '编译未完成，请查看日志。' : 'Typesetting didn’t finish — open the log for details.')}</p>
           ) : ready && !hasTex ? (
-            <p data-testid="pdf-empty-no-tex">Create a .tex file to typeset and preview.</p>
+            <p data-testid="pdf-empty-no-tex">{locale === 'zh' ? '请新建 .tex 文件后编译预览。' : 'Create a .tex file to typeset and preview.'}</p>
           ) : (
-            <p>Press <span className="kbd">{shortcut('S')}</span> to typeset and preview.</p>
+            <p>{locale === 'zh' ? '点击「编译」或按' : 'Press'} <span className="kbd">{shortcut('S')}</span> {locale === 'zh' ? '生成 PDF 预览。' : 'to typeset and preview.'}</p>
           )}
         </div>
       )}
