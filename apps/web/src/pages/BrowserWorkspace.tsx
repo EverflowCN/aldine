@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { BASE_PATH } from '../basePath';
+import OfflineCodePane from '../components/OfflineCodePane';
+import PdfPane from '../components/PdfPane';
+import { IconChevronLeft } from '../components/Icons';
+import { toggleTheme } from '../theme';
 import './BrowserWorkspace.css';
 
 // Browser-only projects deliberately bypass Aldine's server-only API, auth and Yjs.
@@ -145,6 +149,12 @@ export default function BrowserWorkspace() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [unsaved, setUnsaved] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [compileStatus, setCompileStatus] = useState<'idle' | 'compiling' | 'ok' | 'error'>('idle');
+  const [pdfWidth, setPdfWidth] = useState(() => Math.max(330, Math.round(window.innerWidth * .40)));
+  const [resizing, setResizing] = useState(false);
+  const clampPdf = (w: number) => Math.min(Math.max(260, w), Math.max(280, window.innerWidth - (sidebarHidden ? 390 : 540)));
   const [cacheHint, setCacheHint] = useState('正在检查编译资源缓存…');
   const cacheSetup = useRef<Promise<any> | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -332,6 +342,7 @@ export default function BrowserWorkspace() {
     const main = workspace.files.find((f) => f.path === workspace.rootFile);
     if (!main || !isText(main)) { setState('请选择有效的 .tex 主文件。'); return; }
     setBusy(true);
+    setCompileStatus('compiling');
     setShowLog(true);
     setState('正在检查编译资源缓存…');
     setErrorLog('');
@@ -381,7 +392,8 @@ export default function BrowserWorkspace() {
       });
       setErrorLog(result.log || '(无编译日志)');
       if (!result.success || !result.pdf?.length) {
-        setState('编译失败：请查看日志，检查缺失字体或宏包。Exit code: ' + result.exitCode);
+        setCompileStatus('error');
+        setState('编译失败：请查看日志，检查缺失字体或宏包。退出码：' + result.exitCode);
         return;
       }
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);
@@ -389,8 +401,10 @@ export default function BrowserWorkspace() {
       const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
       previewRef.current = url;
       setPreviewUrl(url);
+      setCompileStatus('ok');
       setState('编译成功，耗时 ' + ((performance.now() - started) / 1000).toFixed(1) + ' 秒（含资源加载）。');
     } catch (err: unknown) {
+      setCompileStatus('error');
       setErrorLog(err instanceof Error ? err.stack || err.message : String(err));
       setState('浏览器编译失败。请查看日志；手机内存不足或资源未就绪都可能导致失败。');
       runnerRef.current?.terminate();
@@ -401,79 +415,182 @@ export default function BrowserWorkspace() {
 
   const current = workspace.files.find((f) => f.path === active);
   const textFile = current && isText(current) ? current : null;
+  const lineCount = textFile ? textFile.content.split('\n').length : 0;
+  const localReady = ready && !unsaved;
+  const displayFiles = [...workspace.files].sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'));
+  const changePdfWidth = (w: number) => setPdfWidth(clampPdf(w));
+  const statusMessage = state;
   return (
-    <div className="browser-ws">
-      <header className="browser-ws__top">
-        <a className="browser-ws__brand" href={BASE_PATH + '/'}>aldine<em>.</em><span> / 本地工作区</span></a>
-        <span className="browser-ws__chip">浏览器编译 · 无后端</span>
-        <span className="browser-ws__grow" />
-        <a className="btn btn--small" href={BASE_PATH + '/'}>返回项目首页</a>
-        <a className="btn btn--small" href="/paper/">做题本</a>
-        <a className="btn btn--small" href="https://github.com/EverflowCN/aldine" target="_blank" rel="noopener noreferrer">项目源码</a>
+    <div className="editor-shell browser-aldine" data-testid="editor-shell">
+      {/* Keep Aldine's toolbar, panes, CodeMirror editor and PDF renderer native.
+          Only the storage/compile transport is swapped from Fastify to IndexedDB+BusyTeX. */}
+      <header className="toolbar browser-aldine__toolbar">
+        <a className="btn btn--ghost" href={BASE_PATH + '/'} title="返回 Aldine 项目页" aria-label="返回项目页"><IconChevronLeft /></a>
+        <input className="toolbar__name browser-aldine__project" value={workspace.name}
+          aria-label="项目名称" onChange={(e) => update({ name: e.target.value.slice(0, 100) })} />
+        <span className="browser-aldine__branch" title="工程保存在当前浏览器，不通过服务器同步">本地项目</span>
+        <span className="toolbar__spacer" />
+        <label className="browser-aldine__tool-label" htmlFor="browser-engine">编译器</label>
+        <select id="browser-engine" className="browser-aldine__engine"
+          value={workspace.engine} onChange={(e) => update({ engine: e.target.value as Engine })}>
+          <option value="xelatex">XeLaTeX</option>
+          <option value="pdflatex">pdfLaTeX</option>
+          <option value="lualatex">LuaLaTeX</option>
+        </select>
+        <button className="btn btn--ghost browser-aldine__minor" onClick={() => setSidebarHidden((v) => !v)}>
+          {sidebarHidden ? '显示文件' : '隐藏文件'}
+        </button>
+        <button className="btn btn--ghost browser-aldine__minor" title="切换 Aldine 明暗主题" onClick={() => toggleTheme()}>主题</button>
+        <button className="btn browser-aldine__minor" disabled={busy} onClick={() => zipRef.current?.click()}>导入 ZIP</button>
+        <button className="btn browser-aldine__minor" disabled={busy} onClick={() => void exportZip()}>导出 ZIP</button>
+        <div className="toolbar__group">
+          <button className="btn btn--primary" onClick={() => void compile()} disabled={!ready || busy}
+            aria-busy={busy} data-testid="browser-compile" title="浏览器 XeLaTeX 编译（Ctrl/⌘ + S）">
+            {busy && <span className="spinner" />}
+            {busy ? '编译中…' : '编译'}
+          </button>
+        </div>
       </header>
-      <div className="browser-ws__note">
-        <strong>本地模式</strong>：工程保存在本浏览器；编译资源首次下载后可缓存，再次打开仍会初始化引擎，但无需重复下载已缓存的资源。自动检查缓存、尽力申请持久存储；如果被系统清理，下次打开自动检测并补齐。手动清理数据、无痕模式和浏览器权限限制仍可能删除缓存。支持 ZIP 导入/导出；暂不提供多人协作与 Git。
+
+      <div className="browser-aldine__info" role="status">
+        <span className="browser-aldine__status-text" title={statusMessage}>{statusMessage}</span>
+        <span className="browser-aldine__save">{localReady ? '✓ 本地已保存' : '○ 正在保存'}</span>
+        <span className="browser-aldine__cache" data-testid="busytex-cache-status" title={cacheHint}>{cacheHint}</span>
+        <span className="browser-aldine__info-spacer" />
+        <span className="browser-aldine__mode">WebAssembly · 离线编译</span>
       </div>
-      <div className="browser-ws__toolbar">
-        <input aria-label="工程名称" className="browser-ws__name" value={workspace.name} onChange={(e) => update({ name: e.target.value.slice(0, 100) })} />
-        <label className="browser-ws__label">编译器
-          <select className="browser-ws__select" value={workspace.engine} onChange={(e) => update({ engine: e.target.value as Engine })}>
-            <option value="xelatex">XeLaTeX</option><option value="pdflatex">pdfLaTeX</option><option value="lualatex">LuaLaTeX</option>
-          </select>
-        </label>
-        <label className="browser-ws__label"><input type="checkbox" checked={allowPackages} onChange={(e) => setAllowPackages(e.target.checked)} />按需下载宏包</label>
-        <span className="browser-ws__grow" />
-        <button className="btn" onClick={insertChineseDemo} disabled={busy} title="覆盖主文件，仅用于中文兼容测试">中文测试</button>
-        <button className="btn btn--primary" onClick={compile} disabled={!ready || busy} aria-busy={busy} data-testid="browser-compile">{busy ? '编译中…' : '编译 PDF'}</button>
-        {previewUrl && <a className="btn" href={previewUrl} download={(workspace.name || 'everflow').replace(/[\\/:*?"<>|]/g, '-') + '.pdf'}>下载 PDF</a>}
-      </div>
-      <div className="browser-ws__status" role="status">{state} {unsaved ? '· 保存中' : '· 已保存'}</div>
-      <div className="browser-ws__cache" data-testid="busytex-cache-status">
-        <span>{cacheHint}</span>
-        <span className="browser-ws__cache-auto" title="自动验证缺失文件、请求浏览器授予持久存储并在下次访问时恢复被清理的缓存；浏览器可能拒绝授权。">自动缓存 · 无需操作</span>
-      </div>
-      <div className="browser-ws__body">
-        <aside className="browser-ws__sidebar">
-          <div className="browser-ws__section">工程文件 <span>{workspace.files.length}</span></div>
-          <div className="browser-ws__files">
-            {workspace.files.map((f) => <div className={'browser-ws__file' + (active === f.path ? ' browser-ws__file--active' : '')} key={f.path}>
-              <button title={f.path} onClick={() => setActive(f.path)}>{f.path === workspace.rootFile ? '◆ ' : '· '}{f.path}</button>
-              <button aria-label={'删除 ' + f.path} className="browser-ws__remove" onClick={() => removeFile(f.path)}>×</button>
-            </div>)}
+
+      <div className={'workspace browser-aldine__workspace' + (resizing ? ' workspace--resizing' : '')}>
+        <aside className={'pane sidebar' + (sidebarHidden ? ' sidebar--hidden' : '')} data-testid="sidebar">
+          <div className="sidebar__tabs" role="tablist" aria-label="文件面板">
+            <button role="tab" aria-selected="true" className="sidebar__tab sidebar__tab--active">文件</button>
+            <button role="tab" aria-selected="false" className="sidebar__tab"
+              onClick={() => setShowLog((v) => !v)}>日志</button>
           </div>
-          <div className="browser-ws__filebuttons">
-            <button className="btn btn--small" onClick={createFile}>新建</button>
-            <button className="btn btn--small" onClick={() => uploadRef.current?.click()}>导入文件</button>
-            <button className="btn btn--small" disabled={busy} onClick={() => zipRef.current?.click()}>导入 ZIP</button>
-            <button className="btn btn--small" disabled={busy} onClick={exportZip}>导出 ZIP</button>
-            <input ref={uploadRef} type="file" multiple hidden onChange={async (e) => { await addFiles(e.target.files); e.target.value = ''; }} />
-            <input ref={zipRef} type="file" accept=".zip,application/zip" hidden onChange={async (e) => { await importZip(e.target.files?.[0]); e.target.value = ''; }} />
+          <div className="sidebar__body browser-aldine__tree" data-testid="file-tree">
+            <div className="browser-aldine__root">
+              <span>项目文件</span><small>{workspace.files.length}</small>
+            </div>
+            {displayFiles.map((file) => {
+              const isRoot = file.path === workspace.rootFile;
+              const isDir = file.path.includes('/');
+              return (
+                <div className={'browser-aldine__tree-row' + (active === file.path ? ' browser-aldine__tree-row--active' : '')} key={file.path}>
+                  <button className={'tree__item' + (active === file.path ? ' tree__item--active' : '')}
+                    title={file.path} data-testid={'file-' + file.path}
+                    onClick={() => setActive(file.path)}>
+                    <span className="tree__icon" aria-hidden="true">{isText(file) ? '▤' : '▧'}</span>
+                    <span className="browser-aldine__filename">{isDir ? file.path : file.path.split('/').pop()}</span>
+                    {isRoot && <span className="tree__root-tag">主</span>}
+                  </button>
+                  <button className="browser-aldine__tree-more" title={'设置 ' + file.path + ' 为主文件'}
+                    disabled={!/\.tex$/i.test(file.path) || !isText(file)}
+                    onClick={() => { update({ rootFile: file.path }); setActive(file.path); }}>☆</button>
+                  <button className="browser-aldine__tree-more" title={'删除 ' + file.path}
+                    disabled={isRoot} onClick={() => removeFile(file.path)}>×</button>
+                </div>
+              );
+            })}
+            <div className="tree__actions browser-aldine__actions">
+              <button className="btn btn--ghost btn--small" onClick={createFile}>＋ 新建</button>
+              <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => uploadRef.current?.click()}>↑ 上传</button>
+              <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => zipRef.current?.click()}>导入 ZIP</button>
+              <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => void exportZip()}>导出 ZIP</button>
+            </div>
+            <div className="browser-aldine__settings">
+              <label htmlFor="browser-main-file">主文档</label>
+              <select id="browser-main-file" value={workspace.rootFile} onChange={(e) => {
+                update({ rootFile: e.target.value }); setActive(e.target.value);
+              }}>
+                {workspace.files.filter((file) => /\.tex$/i.test(file.path) && isText(file)).map((file) =>
+                  <option key={file.path} value={file.path}>{file.path}</option>)}
+              </select>
+              <label className="browser-aldine__package-toggle">
+                <input type="checkbox" checked={allowPackages} onChange={(e) => setAllowPackages(e.target.checked)} />
+                自动获取缺失宏包
+              </label>
+              <p>当前项目自动存储在本机浏览器。建议定期「导出 ZIP」备份。</p>
+            </div>
           </div>
-          <label className="browser-ws__rootlabel">主文件
-            <select className="browser-ws__select" value={workspace.rootFile} onChange={(e) => { update({ rootFile: e.target.value }); setActive(e.target.value); }}>
-              {workspace.files.filter((f) => /\.tex$/i.test(f.path) && isText(f)).map((f) => <option key={f.path} value={f.path}>{f.path}</option>)}
-            </select>
-          </label>
-          <p className="browser-ws__small">支持导入 .tex、.sty、.cls、.bib 和图片。复杂项目可直接导入 ZIP。用户自行确保所用字体/宏包可在 BusyTeX 中使用。</p>
         </aside>
-        <section className="browser-ws__editor">
-          <div className="browser-ws__panehead"><span>{active}</span><span className="browser-ws__grow" />
-            {current && <button className="btn btn--small" onClick={() => saveAs(new Blob([current.content instanceof Uint8Array ? new Uint8Array(current.content) : current.content]), current.path.split('/').pop() || 'file.tex')}>下载文件</button>}
+
+        <main className="pane pane--editor browser-aldine__source">
+          <div className="pane__header">
+            <span className="statusbar__file" data-testid="active-file">{active}</span>
+            <span className="toolbar__spacer" />
+            {current && <button className="btn btn--ghost btn--small" onClick={() => saveAs(
+              new Blob([typeof current.content === 'string' ? current.content : new Uint8Array(current.content)]),
+              current.path.split('/').pop() || 'main.tex')}>下载文件</button>}
+            <span className="pdf-status">{lineCount} 行</span>
           </div>
-          {textFile ? <textarea aria-label={active} spellCheck={false} value={textFile.content} onChange={(e) => updateFile(active, e.target.value)} /> :
-            <div className="browser-ws__binary">此文件为二进制资源，仅参与编译，不支持直接编辑。</div>}
-        </section>
-        <section className="browser-ws__pdf">
-          <div className="browser-ws__panehead">PDF 预览 <span className="browser-ws__grow" /><span>WebAssembly</span></div>
-          {previewUrl ? <iframe title="浏览器编译 PDF" src={previewUrl} /> :
-            <div className="browser-ws__empty">选择主文件，点击「编译 PDF」<small>首次下载可能较慢；浏览器内存不足可能导致失败</small></div>}
+          {textFile
+            ? <OfflineCodePane key={active} path={active} value={textFile.content}
+                onChange={(value) => updateFile(active, value)} onCompile={() => void compile()} />
+            : <div className="pdf-empty"><p>{current ? '二进制资源不能直接编辑，可在编译时引用。' : '选择文件开始编辑。'}</p></div>}
+        </main>
+
+        <div className={'resizer' + (resizing ? ' resizer--drag' : '')}
+          role="separator" aria-orientation="vertical" aria-label="调整 PDF 预览宽度"
+          aria-valuenow={Math.round(pdfWidth)} aria-valuemin={260}
+          aria-valuemax={Math.max(280, window.innerWidth - 540)} tabIndex={0}
+          onPointerDown={(e) => {
+            if (e.button !== 0 || window.innerWidth < 760) return;
+            e.preventDefault();
+            const node = e.currentTarget;
+            node.setPointerCapture(e.pointerId);
+            const initialX = e.clientX, initialWidth = pdfWidth;
+            setResizing(true);
+            const move = (ev: PointerEvent) => changePdfWidth(initialWidth + initialX - ev.clientX);
+            const up = () => {
+              setResizing(false); node.removeEventListener('pointermove', move);
+              node.removeEventListener('pointerup', up); node.removeEventListener('pointercancel', up);
+            };
+            node.addEventListener('pointermove', move);
+            node.addEventListener('pointerup', up);
+            node.addEventListener('pointercancel', up);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowLeft') changePdfWidth(pdfWidth + 25);
+            if (e.key === 'ArrowRight') changePdfWidth(pdfWidth - 25);
+          }}
+          onDoubleClick={() => changePdfWidth(window.innerWidth * .40)}
+        />
+
+        <section className="pane pane--preview browser-aldine__preview" style={{ width: pdfWidth, flex: 'none' }}>
+          <div className="pane__header browser-aldine__preview-head">
+            <span className="pane__title">PDF 预览</span>
+            <span className="pdf-status">
+              {compileStatus === 'compiling' ? '编译中' : compileStatus === 'ok' ? '已编译' : compileStatus === 'error' ? '编译失败' : '尚未编译'}
+            </span>
+            <span className="toolbar__spacer" />
+            <div className="zoom" aria-label="调整 PDF 缩放">
+              <button className="btn btn--small" aria-label="缩小 PDF" onClick={() => setZoom((v) => Math.max(.5, v - .1))}>−</button>
+              <span className="zoom__label">{Math.round(zoom * 100)}%</span>
+              <button className="btn btn--small" aria-label="放大 PDF" onClick={() => setZoom((v) => Math.min(3, v + .1))}>＋</button>
+            </div>
+            {previewUrl && <a className="btn btn--small" href={previewUrl}
+              download={(workspace.name || 'everflow').replace(/[\\/:*?"<>|]/g, '-') + '.pdf'}>下载 PDF</a>}
+            <button className="btn btn--ghost btn--small" onClick={() => setShowLog((v) => !v)}>日志</button>
+          </div>
+          <PdfPane pdfUrl={previewUrl} branch="local" status={compileStatus} zoom={zoom}
+            locale="zh" stale={compileStatus === 'error' && !!previewUrl} ready={ready} hasTex={workspace.files.some(f => /\.tex$/i.test(f.path))}
+            onFirstOpen={() => { /* No surprise 120MB WASM download until user clicks 编译. */ }} />
         </section>
       </div>
-      <section className="browser-ws__logs">
-        <button className="browser-ws__logtoggle" onClick={() => setShowLog((v) => !v)}>编译日志 <span>{showLog ? '收起 ▲' : '展开 ▼'}</span></button>
-        {showLog && <pre data-testid="browser-compile-log">{errorLog || '暂无日志。'}</pre>}
-      </section>
-      <footer className="browser-ws__footer">Aldine / BusyTeX 均采用 AGPL 开源许可。浏览器模式为独立实验，不承诺与完整 TeX Live 输出完全一致。</footer>
+      {showLog && <section className="browser-aldine__log-panel" aria-label="编译日志">
+        <div className="pane__header">
+          <strong>编译日志</strong>
+          <span className="toolbar__spacer" />
+          <button className="btn btn--ghost btn--small" onClick={() => setShowLog(false)}>收起</button>
+        </div>
+        <pre data-testid="browser-compile-log">{errorLog || '尚无编译日志。'}</pre>
+      </section>}
+      <input ref={uploadRef} type="file" multiple hidden onChange={async (e) => {
+        await addFiles(e.target.files); e.target.value = '';
+      }} />
+      <input ref={zipRef} type="file" accept=".zip,application/zip" hidden onChange={async (e) => {
+        await importZip(e.target.files?.[0]); e.target.value = '';
+      }} />
     </div>
   );
 }
