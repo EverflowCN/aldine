@@ -23,8 +23,12 @@ import { AuthProvider } from './components/Auth';
 import './theme.css';
 import './app.css';
 
-// Static GitHub Pages mode: use a query-based entry to avoid 404 on SPA refresh.
-const localBrowserMode = new URLSearchParams(window.location.search).get('local') === '1';
+// GitHub Pages has no Node/Fastify service: open the native Aldine Chinese
+// editor with local BusyTeX by default. Real Aldine server HTML doesn't carry
+// this meta marker and continues to use normal server routes.
+const params = new URLSearchParams(window.location.search);
+const isStaticSite = document.querySelector('meta[name="aldine-static-pages"]')?.getAttribute('content') === '1';
+const localBrowserMode = params.get('local') === '1' || (isStaticSite && params.get('server') !== '1');
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
