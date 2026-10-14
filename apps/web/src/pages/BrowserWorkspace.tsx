@@ -447,7 +447,14 @@ export default function BrowserWorkspace() {
           ? '正在加载 GitHub 托管的推荐与扩展宏包（首次约 528 MB，仅当前设备下载）…'
           : '正在加载 GitHub 托管的推荐宏包（首次约 192 MB，仅当前设备下载）…'
       );
+      // BusyTeX's default 180-second worker watchdog killed the private
+      // Everflow preamble even when the worker had not crashed. Its existing
+      // compileTimeoutMs option supports up to 15 minutes. Extend the deadline
+      // ONLY for multi-file/large projects; keep simple exercises responsive.
+      const complexProject = workspace.files.length >= 30
+        || workspace.files.some((f) => typeof f.content === 'string' && f.content.length > 120000);
       const result = await engineRef.current[workspace.engine].compile({
+        compileTimeoutMs: complexProject ? 12 * 60 * 1000 : undefined,
         mainTexPath: workspace.rootFile,
         input: main.content,
         additionalFiles: others,
@@ -501,7 +508,10 @@ export default function BrowserWorkspace() {
     } catch (err: unknown) {
       setCompileStatus('error');
       setErrorLog(err instanceof Error ? err.stack || err.message : String(err));
-      setState('浏览器编译失败。请查看日志；手机内存不足或资源未就绪都可能导致失败。');
+      const reason = err instanceof Error ? err.message : String(err);
+      setState(/Compilation timeout|超时/i.test(reason)
+        ? '复杂工程编译超过浏览器限定时间。可精简题源后重试；TeX Live 资源未全部缓存时可能更加耗时。'
+        : '浏览器编译失败。请查看日志；手机内存不足或资源未就绪都可能导致失败。');
       runnerRef.current?.terminate();
       runnerRef.current = null;
       engineRef.current = null;
