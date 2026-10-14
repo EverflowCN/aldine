@@ -115,3 +115,14 @@
   .browser-aldine__workspace .pane--preview { width: 100% !important; min-width: 0; flex: 0 0 55vh !important; min-height: 330px; border-top: 1px solid var(--hairline); }
   .browser-aldine__preview .pdf-pane { min-height: 270px; }
 }
+
+/* Browser-native PDFium renders CID/OpenType Chinese subsets that pdf.js may
+ * silently omit. Preserve Aldine's preview pane frame, toolbar and status. */
+.browser-aldine__preview-mode { display:flex;align-items:center;gap:5px;font-size:var(--text-xs);color:var(--text-2);white-space:nowrap; }
+.browser-aldine__preview-mode select { min-width:0;max-width:155px;height:26px;border:1px solid var(--hairline);border-radius:var(--radius-s);background:var(--bg-panel);color:var(--text);font-size:var(--text-xs);padding:2px 5px; }
+.browser-aldine__native-pdf { width:100%;height:100%;flex:1;min-height:0;border:0;background:var(--bg-app);display:block; }
+.browser-aldine__pdfhint { flex:none;max-height:50px;overflow:auto;color:var(--text-2);background:var(--bg-inset);border-top:1px solid var(--hairline);padding:6px 11px;font-size:var(--text-xs);line-height:1.5; }
+@media(max-width:760px) {
+ .browser-aldine__preview-mode span{display:none;}
+ .browser-aldine__native-pdf{min-height:300px;}
+}
