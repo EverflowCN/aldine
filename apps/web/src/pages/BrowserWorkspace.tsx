@@ -425,7 +425,7 @@ export default function BrowserWorkspace() {
       {/* Keep Aldine's toolbar, panes, CodeMirror editor and PDF renderer native.
           Only the storage/compile transport is swapped from Fastify to IndexedDB+BusyTeX. */}
       <header className="toolbar browser-aldine__toolbar">
-        <a className="btn btn--ghost" href={BASE_PATH + '/'} title="返回 Aldine 项目页" aria-label="返回项目页"><IconChevronLeft /></a>
+        <a className="btn btn--ghost" href="/paper/" title="返回做题本" aria-label="返回做题本"><IconChevronLeft /></a>
         <input className="toolbar__name browser-aldine__project" value={workspace.name}
           aria-label="项目名称" onChange={(e) => update({ name: e.target.value.slice(0, 100) })} />
         <span className="browser-aldine__branch" title="工程保存在当前浏览器，不通过服务器同步">本地项目</span>
