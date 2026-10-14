@@ -33,6 +33,41 @@ const CJK_SOURCE = [
   '\\]',
   '\\end{document}'
 ].join('\n');
+// ZIP central-directory preflight: bound inflated size before passing data to fflate.
+function validateZip(buffer: Uint8Array): void {
+  if (buffer.byteLength > 32 * 1024 * 1024) throw new Error('ZIP 压缩包不能超过 32 MB');
+  const dv = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  let eocd = -1;
+  for (let p = buffer.length - 22; p >= Math.max(0, buffer.length - 65557); p--) {
+    if (dv.getUint32(p, true) === 0x06054b50) { eocd = p; break; }
+  }
+  if (eocd < 0) throw new Error('找不到 ZIP 目录，文件可能损坏');
+  const count = dv.getUint16(eocd + 10, true);
+  if (count > 300 || count === 65535) throw new Error('ZIP 文件数过多或 ZIP64 格式不受支持');
+  let p = dv.getUint32(eocd + 16, true);
+  let total = 0;
+  for (let i = 0; i < count; i++) {
+    if (p + 46 > buffer.length || dv.getUint32(p, true) !== 0x02014b50) throw new Error('ZIP 中央目录格式错误');
+    const flags = dv.getUint16(p + 8, true);
+    const method = dv.getUint16(p + 10, true);
+    const size = dv.getUint32(p + 24, true);
+    const nameLen = dv.getUint16(p + 28, true);
+    const extraLen = dv.getUint16(p + 30, true);
+    const commentLen = dv.getUint16(p + 32, true);
+    total += size;
+    if (flags & 1) throw new Error('不支持带密码的 ZIP');
+    if (method !== 0 && method !== 8) throw new Error('ZIP 使用了不支持的压缩算法');
+    if (total > 80 * 1024 * 1024 || size > 25 * 1024 * 1024) throw new Error('ZIP 解压后资源过大，请精简图片或字体');
+    p += 46 + nameLen + extraLen + commentLen;
+    if (p > buffer.length) throw new Error('ZIP 中央目录超过文件边界');
+  }
+}
+
+async function zipLibrary(): Promise<any> {
+  const path = BASE_PATH + '/browser-test/fflate.mjs';
+  return await import(/* @vite-ignore */ path);
+}
+
 const fresh = (): Workspace => ({
   name: 'Everflow 本地 LaTeX 工程',
   rootFile: 'main.tex',
@@ -111,6 +146,7 @@ export default function BrowserWorkspace() {
   const [unsaved, setUnsaved] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const uploadRef = useRef<HTMLInputElement>(null);
+  const zipRef = useRef<HTMLInputElement>(null);
   const runnerRef = useRef<BusyRunner | null>(null);
   const engineRef = useRef<Record<Engine, BusyCompiler> | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -184,6 +220,52 @@ export default function BrowserWorkspace() {
     setActive(next.find((f) => isText(f))?.path || active);
     setState('已导入 ' + next.length + ' 个文件，仅保存在当前浏览器。');
   }
+  async function importZip(input: File | undefined): Promise<void> {
+    if (!input) return;
+    if (!confirm('导入 ZIP 将替换当前浏览器工程。请先导出 ZIP 备份。确定继续吗？')) return;
+    setBusy(true);
+    setState('正在解析 ZIP 文件…');
+    try {
+      const bytes = new Uint8Array(await input.arrayBuffer());
+      validateZip(bytes);
+      const lib = await zipLibrary();
+      const items = lib.unzipSync(bytes) as Record<string, Uint8Array>;
+      const files: UserFile[] = [];
+      const decoder = new TextDecoder('utf-8');
+      for (const [name, data] of Object.entries(items)) {
+        if (name.endsWith('/') || name.startsWith('__MACOSX/') || name.endsWith('/.DS_Store')) continue;
+        const path = safePath(name);
+        if (!path) throw new Error('ZIP 包含不安全的文件路径：' + name);
+        files.push({ path, content: TEXT_FILE.test(path) ? decoder.decode(data) : data });
+      }
+      const candidates = files.filter((f) => /\.tex$/i.test(f.path) && isText(f));
+      if (!candidates.length) throw new Error('ZIP 中没有 .tex 文件');
+      const root = candidates.find((f) => /(^|\/)main\.tex$/i.test(f.path)) || candidates.find((f) => /(^|\/)root\.tex$/i.test(f.path)) || candidates[0];
+      setWorkspace({ name: input.name.replace(/\.zip$/i, '').slice(0, 100), engine: 'xelatex', rootFile: root.path, files });
+      setActive(root.path);
+      setErrorLog('');
+      setState('ZIP 已导入，共 ' + files.length + ' 个文件。选择根文件后即可编译。');
+    } catch (err: unknown) {
+      setState('ZIP 导入失败：' + (err instanceof Error ? err.message : String(err)));
+    } finally { setBusy(false); }
+  }
+
+  async function exportZip(): Promise<void> {
+    setState('正在打包本地工程…');
+    try {
+      const lib = await zipLibrary();
+      const files: Record<string, Uint8Array> = {};
+      for (const file of workspace.files) {
+        files[file.path] = isText(file) ? new TextEncoder().encode(file.content) : file.content;
+      }
+      const zip = lib.zipSync(files, { level: 6 }) as Uint8Array;
+      saveAs(new Blob([new Uint8Array(zip)], { type: 'application/zip' }), (workspace.name || 'everflow-project').replace(/[\\/:*?"<>|]/g, '_') + '.zip');
+      setState('ZIP 已生成，建议妥善保存备份。');
+    } catch (err: unknown) {
+      setState('ZIP 导出失败：' + String(err));
+    }
+  }
+
   function createFile(): void {
     const raw = prompt('请输入新文件名，例如 chapter.tex 或 preamble.sty');
     if (raw === null) return;
@@ -277,7 +359,7 @@ export default function BrowserWorkspace() {
         <a className="btn btn--small" href="https://github.com/EverflowCN/aldine" target="_blank" rel="noopener noreferrer">项目源码</a>
       </header>
       <div className="browser-ws__note">
-        <strong>本地模式</strong>：文件保存在当前浏览器 IndexedDB，不会同步云端；不要清除网站数据。首次编译需下载引擎和宏包，字体兼容性需实测。暂不提供多人协作、Git 和 ZIP 项目导入。
+        <strong>本地模式</strong>：文件保存在当前浏览器 IndexedDB，不会同步云端；不要清除网站数据。首次编译需下载引擎和宏包，字体兼容性需实测。支持 ZIP 工程导入/导出；暂不提供多人协作与 Git。
       </div>
       <div className="browser-ws__toolbar">
         <input aria-label="工程名称" className="browser-ws__name" value={workspace.name} onChange={(e) => update({ name: e.target.value.slice(0, 100) })} />
@@ -305,14 +387,17 @@ export default function BrowserWorkspace() {
           <div className="browser-ws__filebuttons">
             <button className="btn btn--small" onClick={createFile}>新建</button>
             <button className="btn btn--small" onClick={() => uploadRef.current?.click()}>导入文件</button>
+            <button className="btn btn--small" disabled={busy} onClick={() => zipRef.current?.click()}>导入 ZIP</button>
+            <button className="btn btn--small" disabled={busy} onClick={exportZip}>导出 ZIP</button>
             <input ref={uploadRef} type="file" multiple hidden onChange={async (e) => { await addFiles(e.target.files); e.target.value = ''; }} />
+            <input ref={zipRef} type="file" accept=".zip,application/zip" hidden onChange={async (e) => { await importZip(e.target.files?.[0]); e.target.value = ''; }} />
           </div>
           <label className="browser-ws__rootlabel">主文件
             <select className="browser-ws__select" value={workspace.rootFile} onChange={(e) => { update({ rootFile: e.target.value }); setActive(e.target.value); }}>
               {workspace.files.filter((f) => /\.tex$/i.test(f.path) && isText(f)).map((f) => <option key={f.path} value={f.path}>{f.path}</option>)}
             </select>
           </label>
-          <p className="browser-ws__small">支持导入 .tex、.sty、.cls、.bib 和图片。复杂项目请逐个添加文件。用户自行确保所用字体/宏包可在 BusyTeX 中使用。</p>
+          <p className="browser-ws__small">支持导入 .tex、.sty、.cls、.bib 和图片。复杂项目可直接导入 ZIP。用户自行确保所用字体/宏包可在 BusyTeX 中使用。</p>
         </aside>
         <section className="browser-ws__editor">
           <div className="browser-ws__panehead"><span>{active}</span><span className="browser-ws__grow" />
