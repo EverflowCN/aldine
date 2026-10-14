@@ -42,3 +42,7 @@
 .browser-ws__footer{text-align:center;padding:0 16px 20px;font-size:11px;color:var(--text-3)}
 @media(max-width:1070px){.browser-ws__body{grid-template-columns:minmax(140px,190px) minmax(220px,1fr) minmax(220px,1fr)}}
 @media(max-width:760px){.browser-ws__body{grid-template-columns:minmax(0,1fr)}.browser-ws__files{max-height:150px}.browser-ws__sidebar{min-height:150px}.browser-ws__editor textarea,.browser-ws__pdf iframe,.browser-ws__empty{height:48vh;min-height:320px}.browser-ws__top,.browser-ws__toolbar{gap:7px}.browser-ws__brand{font-size:17px}.browser-ws__name{width:min(90vw,260px)}}
+
+/* Distinguish cached WASM assets from per-visit engine initialization. */
+.browser-ws__cache{padding:0 clamp(14px,2vw,30px) 9px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:var(--text-2);font-size:12px}
+.browser-ws__cache .btn{flex-shrink:0}
