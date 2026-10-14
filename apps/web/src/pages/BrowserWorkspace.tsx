@@ -454,7 +454,7 @@ export default function BrowserWorkspace() {
       const complexProject = workspace.files.length >= 30
         || workspace.files.some((f) => typeof f.content === 'string' && f.content.length > 120000);
       const result = await engineRef.current[workspace.engine].compile({
-        compileTimeoutMs: complexProject ? 12 * 60 * 1000 : undefined,
+        compileTimeoutMs: complexProject ? 15 * 60 * 1000 : undefined,
         mainTexPath: workspace.rootFile,
         input: main.content,
         additionalFiles: others,
