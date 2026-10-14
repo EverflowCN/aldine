@@ -50,7 +50,7 @@ export async function assessTeXLiveCoverage(
   // inside all three pinned TeX Live collections. This catches real packages
   // whose declarations are absent from the upstream Provides-only manifest.
   let everflowFiles = new Map<string, TeXLiveTier>();
-  if (localPaths.some(p => /(^|\\/)Everflow-(Exam|Book|Public)\.tex$/i.test(p))) {
+  if (localPaths.some(p => /^Everflow-(Exam|Book|Public)\.tex$/i.test(p.split('/').pop() || ''))) {
     try {
       const response = await fetch('/latex/deploy/everflow-package-coverage.json', { cache: 'no-store' });
       if (response.ok) {
