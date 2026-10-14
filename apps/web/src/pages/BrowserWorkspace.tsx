@@ -458,11 +458,6 @@ export default function BrowserWorkspace() {
         mainTexPath: workspace.rootFile,
         input: main.content,
         additionalFiles: others,
-        // A full Everflow Exam/Book PDF can exceed BusyTeX's 3-minute
-        // default during first-use font/TeX Live loading and multi-pass runs.
-        // Grant ONLY large projects up to 12 minutes; small tests remain 3m.
-        compileTimeoutMs: workspace.files.length > 30 || /Everflow-(Exam|Book|Public)\.tex$/i.test(workspace.rootFile)
-          ? 12 * 60 * 1000 : 3 * 60 * 1000,
         dataPackagesJs: bundles.length ? bundles : undefined,
         rerun: true,
         verbose: 'info',
