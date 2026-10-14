@@ -189,10 +189,23 @@ export default function BrowserWorkspace() {
   useEffect(() => {
     let mounted = true;
     cacheSetup.current = import(/* @vite-ignore */ BASE_PATH + '/busytex-cache.mjs')
-      .then((lib) => lib.prepareBusyTeXCache())
-      .then((cache) => {
-        if (mounted) setCacheHint(cache.coreCached ? 'XeLaTeX 引擎和基础宏包已缓存，下次访问无需重新下载。' : '首次编译需下载基础资源，下载后将缓存到本机。');
-        return cache;
+      .then(async (lib) => {
+        const cache = await lib.prepareBusyTeXCache();
+        // Emscripten can already hold TeX Live .data in IndexedDB before our new
+        // Service Worker was introduced. Don't label that state as "downloading".
+        let legacyPackageCached = false;
+        if (!cache.coreCached) {
+          try {
+            const busytex = await import(/* @vite-ignore */ BUSYTEX_MODULE);
+            legacyPackageCached = await busytex.isPackageCached(BUSYTEX_ASSETS + '/texlive-basic.js');
+          } catch { /* The editor remains usable without a cache-status probe. */ }
+        }
+        if (mounted) setCacheHint(cache.coreCached
+          ? 'XeLaTeX 引擎和基础宏包已缓存，下次打开只需初始化。'
+          : legacyPackageCached
+            ? '基础宏包已保存在 IndexedDB；编译引擎正使用本地缓存机制。'
+            : '首次编译需下载基础资源，下载后自动保存在当前浏览器。');
+        return { ...cache, legacyPackageCached };
       }).catch(() => {
         if (mounted) setCacheHint('缓存功能不可用；编译仍可尝试。');
         return null;
