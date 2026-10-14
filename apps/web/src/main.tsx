@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import Home from './pages/Home';
+import BrowserWorkspace from './pages/BrowserWorkspace';
 import Editor from './pages/Editor';
 import OAuthConsent from './pages/OAuthConsent';
 import Admin from './pages/Admin';
@@ -22,8 +23,12 @@ import { AuthProvider } from './components/Auth';
 import './theme.css';
 import './app.css';
 
+// Static GitHub Pages mode: use a query-based entry to avoid 404 on SPA refresh.
+const localBrowserMode = new URLSearchParams(window.location.search).get('local') === '1';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
+    {localBrowserMode ? <BrowserWorkspace /> : (
     <ToastProvider>
      <DialogProvider>
       <AuthProvider>
@@ -39,5 +44,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       </AuthProvider>
      </DialogProvider>
     </ToastProvider>
+    )}
   </React.StrictMode>,
 );
