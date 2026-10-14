@@ -316,7 +316,8 @@ export default function BrowserWorkspace() {
       setWorkspace({ name: input.name.replace(/\.zip$/i, '').slice(0, 100), engine: 'xelatex', rootFile: root.path, files });
       setActive(root.path);
       setErrorLog('');
-      setState('ZIP 已导入，共 ' + files.length + ' 个文件。选择根文件后即可编译。');
+      setState('ZIP 已导入，共 ' + files.length + ' 个文件。已自动执行模板依赖检查。');
+      auditWorkspaceFiles(files, root.path, true);
     } catch (err: unknown) {
       setState('ZIP 导入失败：' + (err instanceof Error ? err.message : String(err)));
     } finally { setBusy(false); }
@@ -359,16 +360,16 @@ export default function BrowserWorkspace() {
     setActive(workspace.rootFile);
     setState('已加入 ctexart 中文测试，点击编译进行字体及宏包兼容性验证。');
   }
-  function auditWorkspace(): void {
-    const report = scanLatexDependencies(workspace.files, workspace.rootFile);
+  function auditWorkspaceFiles(projectFiles: UserFile[], mainFile: string, isImported = false): void {
+    const report = scanLatexDependencies(projectFiles, mainFile);
     setPreflight(report);
     setCoverage(null);
     setCoverageState('正在对照 GitHub Pages 上的 Basic、Recommended、Extra 三套宏包目录…');
     setShowPreflight(true);
     setShowLog(false);
-    setState('静态依赖检查完成：' + report.packages.length + ' 个宏包、' +
+    if (!isImported) setState('静态依赖检查完成：' + report.packages.length + ' 个宏包、' +
       report.fontNames.length + ' 个字体候选、' + report.imageCount + ' 张图片；实际兼容性仍须编译验证。');
-    void assessTeXLiveCoverage(report.packages, BUSYTEX_ASSETS, workspace.files.map(f => f.path))
+    void assessTeXLiveCoverage(report.packages, BUSYTEX_ASSETS, projectFiles.map(f => f.path))
       .then((data) => {
         setCoverage(data);
         setCoverageState(data.byTier.unlisted
@@ -377,6 +378,9 @@ export default function BrowserWorkspace() {
       }).catch((e: unknown) => {
         setCoverageState('无法加载 GitHub Pages 上的宏包目录：' + String(e));
       });
+  }
+  function auditWorkspace(): void {
+    auditWorkspaceFiles(workspace.files, workspace.rootFile);
   }
 
   async function compile(): Promise<void> {
@@ -701,6 +705,11 @@ export default function BrowserWorkspace() {
                   <span>尚未列出：{coverage.byTier.unlisted}</span>
                 </div>
                 <p>{coverage.note}</p>
+                {coverage.suggested !== resourceTier && <button className="btn btn--small" type="button" disabled={busy}
+                  title="仅改变下次编译的资源档位，不会立刻下载宏包"
+                  onClick={() => { setResourceTier(coverage.suggested); try { localStorage.setItem('everflow.busytex.resourceTier', coverage.suggested); } catch {} }}>
+                  设为建议的{coverage.suggested === 'extra' ? '扩展' : coverage.suggested === 'recommended' ? '推荐' : '基础'}资源档位（下次编译生效）
+                </button>}
                 {coverage.matches.filter(item => item.tier !== 'basic' && item.tier !== 'local').length > 0 &&
                   <p>{coverage.matches.filter(item => item.tier !== 'basic' && item.tier !== 'local')
                     .map(item => item.name + '（' + ({ recommended: '推荐', extra: '扩展', unlisted: '目录外' } as Record<string,string>)[item.tier] + '）').join('、')}</p>}
