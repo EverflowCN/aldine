@@ -14,7 +14,8 @@ import './BrowserWorkspace.css';
 type Engine = 'xelatex' | 'pdflatex' | 'lualatex';
 type UserFile = { path: string; content: string | Uint8Array };
 type Workspace = { name: string; rootFile: string; engine: Engine; files: UserFile[] };
-type BusyCompiler = { compile(options: Record<string, unknown>): Promise<{ success: boolean; pdf?: Uint8Array; log?: string; exitCode?: number }> };
+type BusyLogEntry = { cmd?: string; log?: string; texmflog?: string; missfontlog?: string; stdout?: string; stderr?: string; exit_code?: number };
+type BusyCompiler = { compile(options: Record<string, unknown>): Promise<{ success: boolean; pdf?: Uint8Array; log?: string; logs?: BusyLogEntry[]; exitCode?: number }> };
 type BusyRunner = { initialize(useWorker?: boolean): Promise<void>; terminate(): void };
 const DB_NAME = 'everflow-aldine-browser-v1';
 const DB_KEY = 'workspace';
@@ -460,10 +461,34 @@ export default function BrowserWorkspace() {
         verbose: 'info',
         remoteEndpoint: allowPackages ? PACKAGE_SERVICE : undefined
       });
-      setErrorLog(result.log || '(无编译日志)');
+      // BusyTeX's top-level log can be empty even when its stage logs
+      // contain the actual XeLaTeX error. Preserve stage stdout/stderr and
+      // missing-font information for the LOCAL browser user only.
+      const detailed = (result.logs || []).map((entry, index) => {
+        const parts = ['【编译阶段 ' + (index + 1) + '】' +
+          (entry.cmd ? ' ' + entry.cmd : '') +
+          (entry.exit_code !== undefined ? ' · 退出码 ' + entry.exit_code : '')];
+        for (const [label, value] of [
+          ['TeX', entry.log], ['TeX 文件查找', entry.texmflog],
+          ['缺失字体', entry.missfontlog], ['标准错误', entry.stderr],
+          ['标准输出', entry.stdout]
+        ] as Array<[string, string | undefined]>) {
+          if (value?.trim()) parts.push('--- ' + label + ' ---\\n' + value.slice(-120000));
+        }
+        return parts.join('\\n');
+      }).join('\\n\\n');
+      const diagnosticLog = [result.log, detailed].filter(Boolean).join('\\n\\n') || '(编译器未返回日志)';
+      setErrorLog(diagnosticLog);
       if (!result.success || !result.pdf?.length) {
         setCompileStatus('error');
-        setState('编译失败：请查看日志，检查缺失字体或宏包。退出码：' + result.exitCode);
+        const hint = /(?:file .* not found|cannot find file|kpse_remote)/i.test(diagnosticLog)
+          ? '可能缺少宏包或引用文件，请检查模板依赖和扩展资源。'
+          : /(?:fontspec error|font .* not found|missfont|missing character)/i.test(diagnosticLog)
+            ? '检测到字体相关错误，请检查 Times New Roman 回退字体及中文字体。'
+            : /(?:out of memory|memory access out of bounds|TeX capacity exceeded)/i.test(diagnosticLog)
+              ? '内存或 TeX 容量不足，尝试减少单次编译页数。'
+              : '请查看下面的详细日志，定位出错的宏包或 LaTeX 命令。';
+        setState('编译失败（退出码：' + (result.exitCode ?? '未知') + '）。' + hint);
         return;
       }
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);
