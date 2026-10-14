@@ -145,6 +145,8 @@ export default function BrowserWorkspace() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [unsaved, setUnsaved] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [cacheHint, setCacheHint] = useState('正在检查编译资源缓存…');
+  const cacheSetup = useRef<Promise<any> | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const zipRef = useRef<HTMLInputElement>(null);
   const runnerRef = useRef<BusyRunner | null>(null);
@@ -183,6 +185,20 @@ export default function BrowserWorkspace() {
     }, 500);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [workspace, ready]);
+
+  useEffect(() => {
+    let mounted = true;
+    cacheSetup.current = import(/* @vite-ignore */ BASE_PATH + '/busytex-cache.mjs')
+      .then((lib) => lib.prepareBusyTeXCache())
+      .then((cache) => {
+        if (mounted) setCacheHint(cache.coreCached ? 'XeLaTeX 引擎和基础宏包已缓存，下次访问无需重新下载。' : '首次编译需下载基础资源，下载后将缓存到本机。');
+        return cache;
+      }).catch(() => {
+        if (mounted) setCacheHint('缓存功能不可用；编译仍可尝试。');
+        return null;
+      });
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => () => {
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
@@ -293,14 +309,22 @@ export default function BrowserWorkspace() {
     if (!main || !isText(main)) { setState('请选择有效的 .tex 主文件。'); return; }
     setBusy(true);
     setShowLog(true);
-    setState('正在准备浏览器编译器，首次加载需要下载约 120 MB 资源…');
+    setState('正在检查编译资源缓存…');
     setErrorLog('');
     const started = performance.now();
     try {
       if (!runnerRef.current || !engineRef.current) {
         // Dynamic import intentionally points to the static library built from our fork.
         const libPath = BUSYTEX_MODULE;
+        // Ensure the cache-first worker controls the page before requesting WASM assets.
+        const status = await cacheSetup.current;
         const lib = await import(/* @vite-ignore */ libPath);
+        const dataReady = typeof lib.isPackageCached === 'function'
+          ? await lib.isPackageCached(BUSYTEX_ASSETS + '/texlive-basic.js').catch(() => false)
+          : false;
+        setState((status?.coreCached || dataReady)
+          ? '正在从本地缓存恢复 XeLaTeX 引擎（仍需初始化 WebAssembly）…'
+          : '首次加载编译资源，约 120 MB；以后优先使用浏览器缓存…');
         const runner = new lib.BusyTexRunner({
           busytexBasePath: BUSYTEX_ASSETS,
           engineMode: 'combined',
@@ -316,6 +340,11 @@ export default function BrowserWorkspace() {
           lualatex: new lib.LuaLatex(runner)
         };
       }
+      import(/* @vite-ignore */ BASE_PATH + '/busytex-cache.mjs').then((cacheApi) =>
+        cacheApi.getBusyTeXCacheStatus().then((cache: { coreCached: boolean }) =>
+          setCacheHint(cache.coreCached ? '编译资源已保存在本机浏览器中。' : '编译资源缓存写入中或被浏览器存储策略限制。')
+        )
+      ).catch(() => {});
       setState('编译中：' + workspace.engine + '（计算在你的浏览器内进行）…');
       const others = workspace.files.filter((f) => f.path !== workspace.rootFile);
       const result = await engineRef.current[workspace.engine].compile({
@@ -359,7 +388,7 @@ export default function BrowserWorkspace() {
         <a className="btn btn--small" href="https://github.com/EverflowCN/aldine" target="_blank" rel="noopener noreferrer">项目源码</a>
       </header>
       <div className="browser-ws__note">
-        <strong>本地模式</strong>：文件保存在当前浏览器 IndexedDB，不会同步云端；不要清除网站数据。首次编译需下载引擎和宏包，字体兼容性需实测。支持 ZIP 工程导入/导出；暂不提供多人协作与 Git。
+        <strong>本地模式</strong>：工程保存在本浏览器；编译资源首次下载后可缓存，再次打开仍会初始化引擎，但无需重复下载已缓存的资源。浏览器清理网站数据、隐私模式或存储空间不足会导致重新下载。支持 ZIP 导入/导出；暂不提供多人协作与 Git。
       </div>
       <div className="browser-ws__toolbar">
         <input aria-label="工程名称" className="browser-ws__name" value={workspace.name} onChange={(e) => update({ name: e.target.value.slice(0, 100) })} />
@@ -375,6 +404,16 @@ export default function BrowserWorkspace() {
         {previewUrl && <a className="btn" href={previewUrl} download={(workspace.name || 'everflow').replace(/[\\/:*?"<>|]/g, '-') + '.pdf'}>下载 PDF</a>}
       </div>
       <div className="browser-ws__status" role="status">{state} {unsaved ? '· 保存中' : '· 已保存'}</div>
+      <div className="browser-ws__cache" data-testid="busytex-cache-status">
+        <span>{cacheHint}</span>
+        <button type="button" className="btn btn--small" title="向浏览器请求保留本网站缓存（浏览器可能拒绝）" onClick={async () => {
+          try {
+            const api = await import(/* @vite-ignore */ BASE_PATH + '/busytex-cache.mjs');
+            const ok = await api.requestBusyTeXPersistentStorage();
+            setCacheHint(ok ? '浏览器已允许持久保留资源缓存。' : '当前浏览器未授予永久保留权限；已缓存内容仍可能随空间策略被清理。');
+          } catch { setCacheHint('当前浏览器不支持申请持久保留缓存。'); }
+        }}>保留缓存</button>
+      </div>
       <div className="browser-ws__body">
         <aside className="browser-ws__sidebar">
           <div className="browser-ws__section">工程文件 <span>{workspace.files.length}</span></div>
