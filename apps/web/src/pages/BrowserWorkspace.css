@@ -141,3 +141,12 @@
 .browser-aldine__preflight-issue--info{border-left:3px solid #577d9d}
 .browser-aldine__preflight-content>p{font-size:11px;margin:1px 0 5px;color:var(--text-3)}
 @media(max-width:760px){.browser-aldine__preflight{max-height:47vh}.browser-aldine__preflight-row{grid-template-columns:1fr;gap:0}}
+
+/* User-visible diagnosis from real XeLaTeX stage logs, independent of color. */
+.browser-aldine__diagnostics{display:flex;flex-direction:column;gap:6px;padding:10px 15px;border-top:1px solid var(--hairline);background:var(--bg-inset);overflow:auto;flex:none;max-height:36vh}
+.browser-aldine__diagnostics>strong{font-size:12px;font-weight:650;color:var(--text)}
+.browser-aldine__diagnostic{display:flex;flex-direction:column;gap:3px;padding:7px 9px;border-radius:5px;font-size:12px;line-height:1.5;border:1px solid var(--hairline)}
+.browser-aldine__diagnostic b{font-weight:650;color:var(--text)}
+.browser-aldine__diagnostic span{color:var(--text-2)}
+.browser-aldine__diagnostic--error{border-left:4px solid #c26040}
+.browser-aldine__diagnostic--warning{border-left:4px solid #b68f35}
