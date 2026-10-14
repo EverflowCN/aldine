@@ -4,6 +4,8 @@ import OfflineCodePane from '../components/OfflineCodePane';
 import PdfPane from '../components/PdfPane';
 import { IconChevronLeft } from '../components/Icons';
 import { toggleTheme } from '../theme';
+import { scanLatexDependencies } from '../util/latex-preflight';
+import type { PreflightResult } from '../util/latex-preflight';
 import './BrowserWorkspace.css';
 
 // Browser-only projects deliberately bypass Aldine's server-only API, auth and Yjs.
@@ -157,6 +159,8 @@ export default function BrowserWorkspace() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [unsaved, setUnsaved] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [showPreflight, setShowPreflight] = useState(false);
+  const [preflight, setPreflight] = useState<PreflightResult | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [zoom, setZoom] = useState(1);
   // PDF.js can omit subset-embedded Chinese CID glyphs (e.g. FandolSong).
@@ -351,6 +355,15 @@ export default function BrowserWorkspace() {
     setActive(workspace.rootFile);
     setState('已加入 ctexart 中文测试，点击编译进行字体及宏包兼容性验证。');
   }
+  function auditWorkspace(): void {
+    const report = scanLatexDependencies(workspace.files, workspace.rootFile);
+    setPreflight(report);
+    setShowPreflight(true);
+    setShowLog(false);
+    setState('静态依赖检查完成：' + report.packages.length + ' 个宏包、' +
+      report.fontNames.length + ' 个字体候选、' + report.imageCount + ' 张图片；实际兼容性仍须编译验证。');
+  }
+
   async function compile(): Promise<void> {
     if (busy) return;
     const main = workspace.files.find((f) => f.path === workspace.rootFile);
@@ -486,6 +499,7 @@ export default function BrowserWorkspace() {
         <button className="btn btn--ghost browser-aldine__minor" title="切换 Aldine 明暗主题" onClick={() => toggleTheme()}>主题</button>
         <button className="btn browser-aldine__minor" disabled={busy} onClick={() => zipRef.current?.click()}>导入 ZIP</button>
         <button className="btn browser-aldine__minor" disabled={busy} onClick={() => void exportZip()}>导出 ZIP</button>
+        <button className="btn browser-aldine__minor" type="button" data-testid="preflight-open" onClick={auditWorkspace}>检查模板依赖</button>
         <div className="toolbar__group">
           <button className="btn btn--primary" onClick={() => void compile()} disabled={!ready || busy}
             aria-busy={busy} data-testid="browser-compile" title="浏览器 XeLaTeX 编译（Ctrl/⌘ + S）">
@@ -539,6 +553,7 @@ export default function BrowserWorkspace() {
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => uploadRef.current?.click()}>↑ 上传</button>
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => zipRef.current?.click()}>导入 ZIP</button>
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => void exportZip()}>导出 ZIP</button>
+              <button className="btn btn--ghost btn--small" type="button" onClick={auditWorkspace}>检查模板</button>
             </div>
             <div className="browser-aldine__settings">
               <label htmlFor="browser-main-file">主文档</label>
@@ -638,6 +653,37 @@ export default function BrowserWorkspace() {
           )}
         </section>
       </div>
+      {showPreflight && preflight && <section className="browser-aldine__preflight" data-testid="preflight-panel">
+        <div className="pane__header">
+          <strong>LaTeX 模板依赖检查（静态分析）</strong>
+          <span className="toolbar__spacer" />
+          <button type="button" className="btn btn--ghost btn--small" onClick={() => setShowPreflight(false)}>关闭</button>
+        </div>
+        <div className="browser-aldine__preflight-content">
+          <div className="browser-aldine__preflight-summary">
+            <span>{preflight.isEverflow ? '已识别 Everflow 原版工程' : '普通 LaTeX 工程'}</span>
+            <span>{preflight.packages.length} 个直接依赖宏包</span>
+            <span>{preflight.fontNames.length} 个字体候选</span>
+            <span>{preflight.imageCount} 个图像资源</span>
+            <span>建议资源：{preflight.recommendedTier === 'recommended' ? '推荐' : '基础'}</span>
+          </div>
+          {preflight.entrypoints.length > 0 && <div className="browser-aldine__preflight-row">
+            <b>编译入口</b><span>{preflight.entrypoints.join('　|　')}</span>
+          </div>}
+          <div className="browser-aldine__preflight-row">
+            <b>宏包依赖</b><span>{preflight.packages.join('、') || '未声明宏包'}</span>
+          </div>
+          <div className="browser-aldine__preflight-row">
+            <b>字体候选</b><span>{preflight.fontNames.join('、') || '未指定字体'}</span>
+          </div>
+          {preflight.warnings.map((issue, i) => <div key={i}
+            className={'browser-aldine__preflight-issue browser-aldine__preflight-issue--' + issue.severity}>
+            <b>{issue.severity === 'error' ? '错误' : issue.severity === 'warning' ? '注意' : '提示'}</b>
+            <span>{issue.message}{issue.file ? '：' + issue.file : ''}</span>
+          </div>)}
+          <p>说明：静态扫描不代表宏包或字体已经安装；是否支持 XeLaTeX、中文、TikZ 和完整页数，必须用 BusyTeX 实际编译检验。</p>
+        </div>
+      </section>}
       {showLog && <section className="browser-aldine__log-panel" aria-label="编译日志">
         <div className="pane__header">
           <strong>编译日志</strong>
