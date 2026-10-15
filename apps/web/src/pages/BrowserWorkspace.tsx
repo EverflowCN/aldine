@@ -807,6 +807,21 @@ export default function BrowserWorkspace() {
             <button type="button" aria-pressed={viewMode === 'editor'} onClick={() => setViewMode('editor')}><TexPageIcon name="code" />仅显示编辑器</button>
             <button type="button" aria-pressed={viewMode === 'pdf'} onClick={() => setViewMode('pdf')}><TexPageIcon name="document" />仅显示 PDF</button>
             <button type="button" onClick={() => setSidebarHidden(v=>!v)}><TexPageIcon name="panelLeft" />{sidebarHidden?'显示文件目录':'隐藏文件目录'}</button>
+            <div className="texpage-editor__mobile-config">
+              <label>编译器
+                <select aria-label="移动端编译器" value={workspace.engine}
+                  onChange={e => update({engine:e.target.value as Engine})}>
+                  <option value="xelatex">XeLaTeX</option><option value="pdflatex">pdfLaTeX</option><option value="lualatex">LuaLaTeX</option>
+                </select>
+              </label>
+              <label>TeX Live 宏包资源
+                <select aria-label="移动端 TeX Live 资源包" disabled={busy} value={resourceTier}
+                  onChange={e => setResourceTier(e.target.value as ResourceChoice)}>
+                  <option value="auto">自动（按工程）</option><option value="basic">基础</option>
+                  <option value="recommended">推荐</option><option value="extra">扩展</option>
+                </select>
+              </label>
+            </div>
           </div>
         </details>
 
