@@ -829,11 +829,6 @@ export default function BrowserWorkspace() {
 
       <div className={'workspace browser-aldine__workspace browser-aldine__workspace--' + viewMode + (resizing ? ' workspace--resizing' : '')}>
         <aside className={'pane sidebar' + (sidebarHidden ? ' sidebar--hidden' : '')} data-testid="sidebar">
-          <div className="sidebar__tabs texpage-editor__sidebar-tabs" role="tablist" aria-label="文件面板">
-            <button role="tab" aria-selected="true" className="sidebar__tab sidebar__tab--active">文件目录</button>
-            <button role="tab" aria-selected="false" className="sidebar__tab" onClick={() => document.querySelector('.browser-aldine__outline')?.scrollIntoView({block:'nearest'})}>文件大纲</button>
-          </div>
-          <div className="sidebar__body browser-aldine__tree" data-testid="file-tree">
             <div className="texpage-editor__explorer-actions" role="toolbar" aria-label="文件目录快捷操作">
               <span className="texpage-editor__explorer-label">文件目录</span>
               <button type="button" title="新建文件" aria-label="新建源文件（快捷）" disabled={busy} onClick={createFile}><TexPageIcon name="filePlus" /></button>
@@ -841,6 +836,12 @@ export default function BrowserWorkspace() {
               <button type="button" title="上传文件" aria-label="上传资源文件（快捷）" disabled={busy} onClick={() => uploadRef.current?.click()}><TexPageIcon name="upload" /></button>
               <button type="button" title="搜索文件" aria-label="定位文件搜索框" onClick={() => document.querySelector<HTMLInputElement>('.browser-aldine__file-search input')?.focus()}><TexPageIcon name="search" /></button>
             </div>
+          <div className="sidebar__tabs texpage-editor__sidebar-tabs" role="tablist" aria-label="文件面板">
+            <button role="tab" aria-selected="true" className="sidebar__tab sidebar__tab--active">文件目录</button>
+            <button role="tab" aria-selected="false" className="sidebar__tab" onClick={() => document.querySelector('.browser-aldine__outline')?.scrollIntoView({block:'nearest'})}>文件大纲</button>
+          </div>
+          <div className="sidebar__body browser-aldine__tree" data-testid="file-tree">
+
             <div className="browser-aldine__root">
               <span>项目文件</span><small>{workspace.files.length}</small>
             </div>
@@ -850,6 +851,8 @@ export default function BrowserWorkspace() {
               onFolder={setSelectedFolder} onRoot={path => { update({ rootFile: path }); setActive(path); }}
               onRename={renamePath} onDelete={deletePath} />
             <div className="browser-aldine__folder-target" title={selectedFolder || '项目根目录'}>当前位置：{selectedFolder || '项目根目录'}</div>
+            <details className="texpage-editor__more-files">
+              <summary><TexPageIcon name="more" /> 更多文件操作 <TexPageIcon name="chevronDown" /></summary>
             <div className="tree__actions browser-aldine__actions">
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={createFile}>新建文件</button>
               <button className="btn btn--ghost btn--small" data-testid="create-folder" disabled={busy} onClick={createFolder}>新建文件夹</button>
@@ -860,6 +863,7 @@ export default function BrowserWorkspace() {
               <button className="btn btn--ghost btn--small" type="button" onClick={auditWorkspace}>检查模板</button>
               <button className="btn btn--ghost btn--small" type="button" disabled={busy} onClick={repairNames}>修复旧中文名称</button>
             </div>
+            </details>
             <div className="browser-aldine__settings">
               <label htmlFor="browser-main-file">主文档</label>
               <select id="browser-main-file" value={workspace.rootFile} onChange={(e) => {
