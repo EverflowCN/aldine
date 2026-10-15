@@ -514,7 +514,7 @@ export default function BrowserWorkspace() {
     setElapsedSeconds(0);
     setCompilePhase('checking');
     setCompileEstimate(estimateCompileTime(workspace.files, resourceTier, Boolean(runnerRef.current),
-      readCompileHistory(historyKey(workspace.files, resourceTier))));
+      runnerRef.current ? readCompileHistory(historyKey(workspace.files, resourceTier)) : undefined));
     setBusy(true);
     setCompileStatus('compiling');
     setShowPreflight(false);
@@ -522,6 +522,7 @@ export default function BrowserWorkspace() {
     setState('正在检查编译资源缓存…');
     setErrorLog('');
     setCompileIssues([]);
+    let warmStart = Boolean(runnerRef.current);
     try {
       const report = scanLatexDependencies(workspace.files, workspace.rootFile);
       // A failed/offline catalog lookup must never silently downgrade a complex
@@ -544,6 +545,7 @@ export default function BrowserWorkspace() {
       const signature = bundles.join('|');
       if (runnerRef.current && runnerBundles.current !== signature) {
         runnerRef.current.terminate(); runnerRef.current = null; engineRef.current = null;
+        warmStart = false;
       }
       if (!runnerRef.current || !engineRef.current) {
         // Dynamic import intentionally points to the static library built from our fork.
@@ -554,8 +556,12 @@ export default function BrowserWorkspace() {
         const dataReady = typeof lib.isPackageCached === 'function'
           ? await lib.isPackageCached(BUSYTEX_ASSETS + '/texlive-basic.js').catch(() => false)
           : false;
-        setCompileEstimate(estimateCompileTime(workspace.files, effectiveTier, Boolean(status?.coreCached || dataReady),
-          readCompileHistory(historyKey(workspace.files, effectiveTier))));
+        const optionalReady = typeof lib.isPackageCached === 'function'
+          ? (await Promise.all(bundles.map(async url => lib.isPackageCached(url).catch(() => false)))).every(Boolean)
+          : false;
+        warmStart = Boolean(status?.coreCached && dataReady && optionalReady);
+        setCompileEstimate(estimateCompileTime(workspace.files, effectiveTier, warmStart,
+          warmStart ? readCompileHistory(historyKey(workspace.files, effectiveTier)) : undefined));
         setCompilePhase('initializing');
         setState((status?.coreCached || dataReady)
           ? '正在从本地缓存恢复 XeLaTeX 引擎（仍需初始化 WebAssembly）…'
@@ -649,7 +655,7 @@ export default function BrowserWorkspace() {
       setCompileStatus('ok');
       setShowLog(false);
       const duration = Math.round((performance.now() - started) / 1000);
-      saveCompileHistory(historyKey(workspace.files, effectiveTier), duration);
+      if (warmStart) saveCompileHistory(historyKey(workspace.files, effectiveTier), duration);
       setElapsedSeconds(duration);
       setState('编译成功，耗时 ' + formatCompileTime(duration) + '（含资源加载）。' +
         (recoveryNote ? ' 已通过单轮编译恢复 PDF；请检查目录和交叉引用。' : ''));
