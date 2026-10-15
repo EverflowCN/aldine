@@ -182,6 +182,7 @@ export default function BrowserWorkspace() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const startedAtRef = useRef(0);
   const phaseStartedAtRef = useRef(0);
+  const phaseStartSecondRef = useRef(0);
   const currentPhaseRef = useRef<CompilePhase>('checking');
   const phaseTotalsRef = useRef<Partial<Record<CompilePhase, number>>>({});
   const compileLock = useRef(false);
@@ -514,6 +515,7 @@ export default function BrowserWorkspace() {
     }
     currentPhaseRef.current = next;
     phaseStartedAtRef.current = now;
+    phaseStartSecondRef.current = Math.floor((now - startedAtRef.current) / 1000);
     setCompilePhase(next);
   }
 
@@ -525,6 +527,7 @@ export default function BrowserWorkspace() {
     const started = performance.now();
     startedAtRef.current = started;
     phaseStartedAtRef.current = started;
+    phaseStartSecondRef.current = 0;
     currentPhaseRef.current = 'checking';
     phaseTotalsRef.current = {};
     setElapsedSeconds(0);
@@ -786,7 +789,7 @@ export default function BrowserWorkspace() {
       {compileStatus === 'compiling' && compileEstimate && <div className="browser-aldine__compile-progress" role="timer" aria-label="本地编译预计时间" data-testid="compile-eta">
         <span className="browser-aldine__phase">{phaseName[compilePhase]}</span>
         <span>总计 {formatCompileTime(elapsedSeconds)}</span>
-        <span data-testid="compile-phase-time">本阶段 {formatCompileTime(Math.max(0, (performance.now() - phaseStartedAtRef.current) / 1000))}</span>
+        <span data-testid="compile-phase-time">本阶段 {formatCompileTime(Math.max(0, elapsedSeconds - phaseStartSecondRef.current))}</span>
         <strong>{describeCompileEstimate(compileEstimate, elapsedSeconds)}</strong>
         <span className="browser-aldine__estimate-note">资源已缓存不代表引擎已启动；WASM 初始化及字体加载速度取决于设备</span>
       </div>}
