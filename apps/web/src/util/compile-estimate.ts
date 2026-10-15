@@ -43,7 +43,7 @@ export function describeCompileEstimate(estimate: CompileEstimate, elapsedSecond
 
 export function historyKey(files: CompileFile[], tier: ResourceTier): string {
   const large = files.length > 20 || files.some(f => typeof f.content === 'string' && f.content.length > 100_000);
-  return 'everflow.compile-history.v1.' + tier + '.' + (large ? 'large' : files.length > 3 ? 'medium' : 'small');
+  return 'everflow.compile-history.v2.' + tier + '.' + (large ? 'large' : files.length > 3 ? 'medium' : 'small');
 }
 
 export function readCompileHistory(key: string): number | undefined {
