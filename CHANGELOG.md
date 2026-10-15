@@ -7,6 +7,7 @@ All notable changes to Aldine are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Browser-local projects now have a searchable folder tree, empty folders, folder upload, and file/folder rename and move controls.
 - The divider between editor and preview can be dragged with a finger or a
   pen, moved with the arrow keys (Shift for larger steps) and reset with a
   double-click.
@@ -44,6 +45,7 @@ All notable changes to Aldine are documented here. The format follows
   (Customize → Connectors → Add → Add custom connector).
 
 ### Fixed
+- ZIP imports decode legacy Chinese names and source text, honor Unicode path metadata, and unwrap enclosing project folders without flattening internal paths.
 - The server could exit with an unhandled `write EPIPE` when a git command
   finished before reading its input (seen during agent commits under load).
 - Visual mode: math that was drawn before the math renderer had finished

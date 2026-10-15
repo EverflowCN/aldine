@@ -150,3 +150,21 @@
 .browser-aldine__diagnostic span{color:var(--text-2)}
 .browser-aldine__diagnostic--error{border-left:4px solid #c26040}
 .browser-aldine__diagnostic--warning{border-left:4px solid #b68f35}
+
+/* Project explorer: real folders, readable Chinese names, touch-safe controls. */
+.browser-aldine__workspace .sidebar { width: 280px; }
+.browser-aldine__file-nodes,.browser-aldine__file-nodes ul { list-style:none; padding:0; margin:0; }
+.browser-aldine__tree-row { min-height:32px; }
+.browser-aldine__tree-row .tree__item { gap:5px; min-height:32px; font-family:var(--font-ui); }
+.browser-aldine__tree-row .tree__icon { display:inline-flex; align-items:center; justify-content:center; flex:none; width:16px; }
+.browser-aldine__disclosure { width:10px; flex:none; text-align:center; }
+.browser-aldine__tree-more { display:inline-flex; align-items:center; justify-content:center; width:24px; height:28px; opacity:.65; }
+.browser-aldine__tree-row:hover .browser-aldine__tree-more,.browser-aldine__tree-row:focus-within .browser-aldine__tree-more { opacity:1; }
+.browser-aldine__file-search { display:block; padding:6px 10px; }
+.browser-aldine__file-search input { width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--hairline); border-radius:6px; padding:7px 8px; color:var(--text); background:var(--bg-inset); font:inherit; font-size:12px; }
+.browser-aldine__explorer-tools { display:flex; gap:3px; justify-content:space-between; padding:0 6px 5px; }
+.browser-aldine__explorer-tools .btn { padding:0 5px; font-size:11px; }
+.browser-aldine__folder-target { padding:8px 12px; font-size:11px; color:var(--text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-top:1px solid var(--hairline); }
+.browser-aldine__no-files { padding:10px; color:var(--text-2); font-size:12px; }
+@media(max-width:980px) and (min-width:761px) { .browser-aldine__workspace .sidebar{width:240px;} }
+@media(max-width:760px) { .browser-aldine__workspace .sidebar{width:100%;max-height:290px;} .browser-aldine__tree-more{min-width:28px;} }

@@ -10,12 +10,14 @@ import { assessTeXLiveCoverage } from '../util/texlive-manifest';
 import type { TeXLiveCoverage } from '../util/texlive-manifest';
 import { diagnoseCompileLog } from '../util/latex-compile-diagnostics';
 import type { CompileIssue } from '../util/latex-compile-diagnostics';
+import BrowserFileTree from '../components/BrowserFileTree';
+import { readZipNames, decodeProjectText, safeProjectPath, projectFolders, chooseRoot, unwrapProject, parentFolders, repairLegacyPath } from '../util/latex-project-files';
 import './BrowserWorkspace.css';
 
 // Browser-only projects deliberately bypass Aldine's server-only API, auth and Yjs.
 type Engine = 'xelatex' | 'pdflatex' | 'lualatex';
 type UserFile = { path: string; content: string | Uint8Array };
-type Workspace = { name: string; rootFile: string; engine: Engine; files: UserFile[] };
+type Workspace = { name: string; rootFile: string; engine: Engine; files: UserFile[]; folders?: string[] };
 type BusyLogEntry = { cmd?: string; log?: string; texmflog?: string; missfontlog?: string; stdout?: string; stderr?: string; exit_code?: number };
 type BusyCompiler = { compile(options: Record<string, unknown>): Promise<{ success: boolean; pdf?: Uint8Array; log?: string; logs?: BusyLogEntry[]; exitCode?: number }> };
 type BusyRunner = { initialize(useWorker?: boolean): Promise<void>; terminate(): void };
@@ -44,36 +46,6 @@ const CJK_SOURCE = [
   '\\]',
   '\\end{document}'
 ].join('\n');
-// ZIP central-directory preflight: bound inflated size before passing data to fflate.
-function validateZip(buffer: Uint8Array): void {
-  if (buffer.byteLength > 32 * 1024 * 1024) throw new Error('ZIP 压缩包不能超过 32 MB');
-  const dv = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  let eocd = -1;
-  for (let p = buffer.length - 22; p >= Math.max(0, buffer.length - 65557); p--) {
-    if (dv.getUint32(p, true) === 0x06054b50) { eocd = p; break; }
-  }
-  if (eocd < 0) throw new Error('找不到 ZIP 目录，文件可能损坏');
-  const count = dv.getUint16(eocd + 10, true);
-  if (count > 300 || count === 65535) throw new Error('ZIP 文件数过多或 ZIP64 格式不受支持');
-  let p = dv.getUint32(eocd + 16, true);
-  let total = 0;
-  for (let i = 0; i < count; i++) {
-    if (p + 46 > buffer.length || dv.getUint32(p, true) !== 0x02014b50) throw new Error('ZIP 中央目录格式错误');
-    const flags = dv.getUint16(p + 8, true);
-    const method = dv.getUint16(p + 10, true);
-    const size = dv.getUint32(p + 24, true);
-    const nameLen = dv.getUint16(p + 28, true);
-    const extraLen = dv.getUint16(p + 30, true);
-    const commentLen = dv.getUint16(p + 32, true);
-    total += size;
-    if (flags & 1) throw new Error('不支持带密码的 ZIP');
-    if (method !== 0 && method !== 8) throw new Error('ZIP 使用了不支持的压缩算法');
-    if (total > 80 * 1024 * 1024 || size > 25 * 1024 * 1024) throw new Error('ZIP 解压后资源过大，请精简图片或字体');
-    p += 46 + nameLen + extraLen + commentLen;
-    if (p > buffer.length) throw new Error('ZIP 中央目录超过文件边界');
-  }
-}
-
 async function zipLibrary(): Promise<any> {
   const path = BASE_PATH + '/browser-test/fflate.mjs';
   return await import(/* @vite-ignore */ path);
@@ -125,11 +97,7 @@ async function persistWorkspace(w: Workspace): Promise<void> {
 function isText(file: UserFile): file is { path: string; content: string } {
   return typeof file.content === 'string';
 }
-function safePath(input: string): string | null {
-  const p = input.replace(/\\/g, '/').replace(/^\/+/, '').trim();
-  if (!p || p.includes('\0') || p.length > 240 || p.split('/').some((x) => x === '..' || x === '.' || !x)) return null;
-  return p;
-}
+const safePath = safeProjectPath;
 function saveAs(data: Blob, name: string): void {
   const url = URL.createObjectURL(data);
   const a = document.createElement('a');
@@ -148,6 +116,8 @@ const PACKAGE_SERVICE = 'https://texlive2026.texlyre.org';
 export default function BrowserWorkspace() {
   const [workspace, setWorkspace] = useState<Workspace>(fresh);
   const [active, setActive] = useState('main.tex');
+  const [selectedFolder, setSelectedFolder] = useState('');
+  const folderUploadRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState('正在读取本地工程…');
@@ -276,16 +246,23 @@ export default function BrowserWorkspace() {
   }
   async function addFiles(list: FileList | null): Promise<void> {
     if (!list?.length) return;
+    setBusy(true);
+    try {
     const next: UserFile[] = [];
     let total = 0;
     for (const file of Array.from(list)) {
-      const path = safePath(file.webkitRelativePath || file.name);
+      const relative = file.webkitRelativePath || file.name;
+      const path = safePath(selectedFolder ? selectedFolder + '/' + relative : relative);
       if (!path) { setState('跳过不安全的文件路径。'); continue; }
       total += file.size;
       if (total > 30 * 1024 * 1024) { setState('单次导入最多 30 MB；大型资源请分批导入。'); return; }
-      next.push({ path, content: TEXT_FILE.test(path) ? await file.text() : new Uint8Array(await file.arrayBuffer()) });
+      next.push({ path, content: TEXT_FILE.test(path) ? decodeProjectText(new Uint8Array(await file.arrayBuffer())) : new Uint8Array(await file.arrayBuffer()) });
     }
     if (!next.length) return;
+    const incoming = new Set(next.map(f => f.path));
+    const combined = [...workspace.files.filter(f => !incoming.has(f.path)), ...next];
+    const folderNames = projectFolders(combined, workspace.folders);
+    if (combined.some(f => folderNames.includes(f.path))) throw new Error('上传文件与已有目录重名');
     setWorkspace((old) => {
       const map = new Map(old.files.map((f) => [f.path, f]));
       next.forEach((f) => map.set(f.path, f));
@@ -295,6 +272,9 @@ export default function BrowserWorkspace() {
     });
     setActive(next.find((f) => isText(f))?.path || active);
     setState('已导入 ' + next.length + ' 个文件，仅保存在当前浏览器。');
+    } catch (error) {
+      setState('文件导入失败：' + (error instanceof Error ? error.message : String(error)));
+    } finally { setBusy(false); }
   }
   async function importZip(input: File | undefined): Promise<void> {
     if (!input) return;
@@ -303,27 +283,24 @@ export default function BrowserWorkspace() {
     setState('正在解析 ZIP 文件…');
     try {
       const bytes = new Uint8Array(await input.arrayBuffer());
-      validateZip(bytes);
+      const names = readZipNames(bytes);
       const lib = await zipLibrary();
       const items = lib.unzipSync(bytes) as Record<string, Uint8Array>;
-      const files: UserFile[] = [];
-      const decoder = new TextDecoder('utf-8');
-      for (const [name, data] of Object.entries(items)) {
-        if (name.endsWith('/') || name.startsWith('__MACOSX/') || name.endsWith('/.DS_Store')) continue;
-        const path = safePath(name);
-        if (!path) throw new Error('ZIP 包含不安全的文件路径：' + name);
-        files.push({ path, content: TEXT_FILE.test(path) ? decoder.decode(data) : data });
+      const imported: UserFile[] = [];
+      const importedFolders: string[] = [];
+      for (const entry of names) {
+        if (entry.path.split('/').some(part => part === '__MACOSX' || part === '.DS_Store')) continue;
+        if (entry.directory) { importedFolders.push(entry.path); continue; }
+        const data = items[entry.key];
+        if (!data) throw new Error('ZIP 文件目录与内容不一致');
+        imported.push({ path: entry.path, content: TEXT_FILE.test(entry.path) ? decodeProjectText(data) : data });
       }
-      const candidates = files.filter((f) => /\.tex$/i.test(f.path) && isText(f));
-      if (!candidates.length) throw new Error('ZIP 中没有 .tex 文件');
-      // Everflow ZIPs ship many helper .tex files and 3 real entrypoints.
-      // Prefer Exam explicitly instead of accidentally compiling a helper.
-      const root = candidates.find((f) => /(^|\/)Everflow-Exam\.tex$/i.test(f.path))
-        || candidates.find((f) => /(^|\/)main\.tex$/i.test(f.path))
-        || candidates.find((f) => /(^|\/)root\.tex$/i.test(f.path))
-        || candidates.find((f) => /(^|\/)Everflow-(Book|Public)\.tex$/i.test(f.path))
-        || candidates.slice().sort((a,b) => a.path.split('/').length - b.path.split('/').length)[0];
-      setWorkspace({ name: input.name.replace(/\.zip$/i, '').slice(0, 100), engine: 'xelatex', rootFile: root.path, files });
+      const { files, folders } = unwrapProject(imported, importedFolders);
+      const root = chooseRoot(files);
+      setWorkspace({ name: input.name.replace(/\.zip$/i, '').slice(0, 100), engine: 'xelatex', rootFile: root.path, files, folders });
+      setSelectedFolder('');
+      setPreviewUrl(null);
+      setCompileStatus('idle');
       setActive(root.path);
       setErrorLog('');
       setState('ZIP 已导入，共 ' + files.length + ' 个文件。已自动执行模板依赖检查。');
@@ -337,7 +314,8 @@ export default function BrowserWorkspace() {
     setState('正在打包本地工程…');
     try {
       const lib = await zipLibrary();
-      const files: Record<string, Uint8Array> = {};
+      const files: Record<string, Uint8Array> = Object.create(null);
+      for (const folder of projectFolders(workspace.files, workspace.folders)) files[folder + '/'] = new Uint8Array();
       for (const file of workspace.files) {
         files[file.path] = typeof file.content === 'string' ? new TextEncoder().encode(file.content) : new Uint8Array(file.content);
       }
@@ -350,13 +328,66 @@ export default function BrowserWorkspace() {
   }
 
   function createFile(): void {
-    const raw = prompt('请输入新文件名，例如 chapter.tex 或 preamble.sty');
+    const raw = prompt('请输入文件路径，可用 / 放入文件夹', (selectedFolder ? selectedFolder + '/' : '') + '新文件.tex');
     if (raw === null) return;
     const path = safePath(raw);
     if (!path) { setState('文件名无效，不能包含上级目录或绝对路径。'); return; }
-    if (workspace.files.some((f) => f.path === path)) { setState('文件已存在。'); return; }
+    if (!availablePath(path)) { setState('路径已存在，或有同名文件阻挡目录。'); return; }
     setWorkspace((old) => ({ ...old, files: [...old.files, { path, content: '' }] }));
     setActive(path);
+  }
+  function availablePath(path: string, excluding = ''): boolean {
+    const all = [...workspace.files.map(f => f.path), ...projectFolders(workspace.files, workspace.folders)]
+      .filter(p => p !== excluding && !p.startsWith(excluding + '/'));
+    return !all.includes(path) && !workspace.files.some(f => f.path !== excluding && parentFolders(path).includes(f.path));
+  }
+  function repairNames(): void {
+    const files = workspace.files.map(f => ({ ...f, path: repairLegacyPath(f.path) }));
+    const changed = files.filter((f, i) => f.path !== workspace.files[i].path);
+    if (!changed.length) { setState('未发现可恢复的旧中文文件名。若内容已有乱码，请重新导入原始 ZIP。'); return; }
+    if (new Set(files.map(f => f.path)).size !== files.length) { setState('修复后出现重名，请重新导入原始 ZIP。'); return; }
+    if (!confirm('将修复 ' + changed.length + ' 个旧中文文件名，例如：' + changed.slice(0, 3).map(f => f.path).join('、') + '。确定继续吗？')) return;
+    setWorkspace(old => ({ ...old, files, folders: (old.folders || []).map(repairLegacyPath), rootFile: repairLegacyPath(old.rootFile) }));
+    setActive(repairLegacyPath(active)); setSelectedFolder(repairLegacyPath(selectedFolder));
+    auditWorkspaceFiles(files, repairLegacyPath(workspace.rootFile));
+    setState('旧中文文件名已修复。若正文仍有乱码，请重新导入原始 ZIP 恢复原始字节。');
+  }
+  function createFolder(): void {
+    const raw = prompt('请输入文件夹路径', (selectedFolder ? selectedFolder + '/' : '') + '新文件夹');
+    if (raw === null) return;
+    const path = safePath(raw);
+    if (!path || !availablePath(path)) { setState('文件夹路径无效或已存在。'); return; }
+    update({ folders: [...(workspace.folders || []), path] });
+    setSelectedFolder(path);
+    setState('已创建文件夹：' + path);
+  }
+  function renamePath(path: string, directory: boolean): void {
+    const raw = prompt('输入新路径；修改父目录即可移动。引用此路径的 LaTeX 指令需要同步修改。', path);
+    if (raw === null || raw === path) return;
+    const target = safePath(raw);
+    if (!target || !availablePath(target, path) || (directory && target.startsWith(path + '/'))) {
+      setState('新路径无效、已存在或位于自身目录中。'); return;
+    }
+    const rewrite = (value: string) => value === path ? target : directory && value.startsWith(path + '/') ? target + value.slice(path.length) : value;
+    const files = workspace.files.map(f => ({ ...f, path: rewrite(f.path) }));
+    const folders = projectFolders(workspace.files, workspace.folders).map(rewrite);
+    if (new Set(files.map(f => f.path)).size !== files.length || folders.some(p => files.some(f => f.path === p))) {
+      setState('移动后存在文件与文件夹重名，请选择其他路径。'); return;
+    }
+    setWorkspace(old => ({ ...old, files, folders, rootFile: rewrite(old.rootFile) }));
+    setActive(rewrite(active)); setSelectedFolder(rewrite(selectedFolder));
+    setPreflight(null); setShowPreflight(false);
+    setState('路径已更新：' + target + '。请同步修改代码中的引用路径。');
+  }
+  function deletePath(path: string, directory: boolean): void {
+    if (!directory) { removeFile(path); return; }
+    if (workspace.rootFile.startsWith(path + '/')) { setState('文件夹包含主文件，请先更换主文件。'); return; }
+    const count = workspace.files.filter(f => f.path.startsWith(path + '/')).length;
+    if (!confirm('删除文件夹“' + path + '”及其中 ' + count + ' 个文件？')) return;
+    setWorkspace(old => ({ ...old, files: old.files.filter(f => !f.path.startsWith(path + '/')),
+      folders: projectFolders(old.files, old.folders).filter(p => p !== path && !p.startsWith(path + '/')) }));
+    if (active.startsWith(path + '/')) setActive(workspace.rootFile);
+    if (selectedFolder === path || selectedFolder.startsWith(path + '/')) setSelectedFolder('');
   }
   function removeFile(path: string): void {
     if (path === workspace.rootFile) { setState('不能删除主文件，请先设置其他主文件。'); return; }
@@ -523,7 +554,6 @@ export default function BrowserWorkspace() {
   const textFile = current && isText(current) ? current : null;
   const lineCount = textFile ? textFile.content.split('\n').length : 0;
   const localReady = ready && !unsaved;
-  const displayFiles = [...workspace.files].sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'));
   const changePdfWidth = (w: number) => setPdfWidth(clampPdf(w));
   const statusMessage = state;
   const choosePdfRenderer = (renderer: 'native' | 'pdfjs') => {
@@ -594,32 +624,21 @@ export default function BrowserWorkspace() {
             <div className="browser-aldine__root">
               <span>项目文件</span><small>{workspace.files.length}</small>
             </div>
-            {displayFiles.map((file) => {
-              const isRoot = file.path === workspace.rootFile;
-              const isDir = file.path.includes('/');
-              return (
-                <div className={'browser-aldine__tree-row' + (active === file.path ? ' browser-aldine__tree-row--active' : '')} key={file.path}>
-                  <button className={'tree__item' + (active === file.path ? ' tree__item--active' : '')}
-                    title={file.path} data-testid={'file-' + file.path}
-                    onClick={() => setActive(file.path)}>
-                    <span className="tree__icon" aria-hidden="true">{isText(file) ? '▤' : '▧'}</span>
-                    <span className="browser-aldine__filename">{isDir ? file.path : file.path.split('/').pop()}</span>
-                    {isRoot && <span className="tree__root-tag">主</span>}
-                  </button>
-                  <button className="browser-aldine__tree-more" title={'设置 ' + file.path + ' 为主文件'}
-                    disabled={!/\.tex$/i.test(file.path) || !isText(file)}
-                    onClick={() => { update({ rootFile: file.path }); setActive(file.path); }}>☆</button>
-                  <button className="browser-aldine__tree-more" title={'删除 ' + file.path}
-                    disabled={isRoot} onClick={() => removeFile(file.path)}>×</button>
-                </div>
-              );
-            })}
+            <BrowserFileTree files={workspace.files} folders={workspace.folders || []} active={active}
+              root={workspace.rootFile} selectedFolder={selectedFolder} disabled={busy}
+              onSelect={path => { setActive(path); setSelectedFolder(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''); }}
+              onFolder={setSelectedFolder} onRoot={path => { update({ rootFile: path }); setActive(path); }}
+              onRename={renamePath} onDelete={deletePath} />
+            <div className="browser-aldine__folder-target" title={selectedFolder || '项目根目录'}>当前位置：{selectedFolder || '项目根目录'}</div>
             <div className="tree__actions browser-aldine__actions">
-              <button className="btn btn--ghost btn--small" onClick={createFile}>＋ 新建</button>
+              <button className="btn btn--ghost btn--small" disabled={busy} onClick={createFile}>新建文件</button>
+              <button className="btn btn--ghost btn--small" data-testid="create-folder" disabled={busy} onClick={createFolder}>新建文件夹</button>
+              <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => folderUploadRef.current?.click()}>上传文件夹</button>
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => uploadRef.current?.click()}>↑ 上传</button>
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => zipRef.current?.click()}>导入 ZIP</button>
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => void exportZip()}>导出 ZIP</button>
               <button className="btn btn--ghost btn--small" type="button" onClick={auditWorkspace}>检查模板</button>
+              <button className="btn btn--ghost btn--small" type="button" disabled={busy} onClick={repairNames}>修复旧中文名称</button>
             </div>
             <div className="browser-aldine__settings">
               <label htmlFor="browser-main-file">主文档</label>
@@ -790,6 +809,9 @@ export default function BrowserWorkspace() {
         </div>}
         <pre data-testid="browser-compile-log">{errorLog || '尚无编译日志。'}</pre>
       </section>}
+      <input ref={folderUploadRef} type="file" multiple hidden {...{ webkitdirectory: '', directory: '' }} onChange={async e => {
+        await addFiles(e.target.files); e.target.value = '';
+      }} />
       <input ref={uploadRef} type="file" multiple hidden onChange={async (e) => {
         await addFiles(e.target.files); e.target.value = '';
       }} />

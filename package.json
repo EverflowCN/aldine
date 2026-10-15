@@ -22,7 +22,8 @@
     "test:e2e:provisioning": "npx playwright test -c e2e/playwright.provisioning.config.ts"
   },
   "devDependencies": {
-    "@playwright/test": "^1.53.0"
+    "@playwright/test": "^1.53.0",
+    "fflate": "0.8.2"
   },
   "license": "AGPL-3.0-only"
 }

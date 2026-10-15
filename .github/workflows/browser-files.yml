@@ -1,0 +1,32 @@
+name: Browser project files
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/src/pages/BrowserWorkspace*'
+      - 'apps/web/src/components/BrowserFileTree.tsx'
+      - 'apps/web/src/util/latex-project-files.ts'
+      - 'apps/web/src/util/latex-preflight.ts'
+      - 'e2e/tests/61-browser-local-files.spec.ts'
+      - 'e2e/playwright.browser-files.config.ts'
+      - '.github/workflows/browser-files.yml'
+permissions:
+  contents: read
+jobs:
+  browser-files:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck -w apps/web
+      - run: npm test -w apps/web -- latex-
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test -c e2e/playwright.browser-files.config.ts

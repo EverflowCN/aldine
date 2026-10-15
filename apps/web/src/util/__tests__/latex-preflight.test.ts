@@ -49,3 +49,12 @@ describe('Everflow offline LaTeX preflight', () => {
     expect(data.warnings.some(w => w.message.includes('自定义文档类'))).toBe(false);
   });
 });
+
+it('resolves Chinese names, input search paths and graphicspath', () => {
+  const report = scanLatexDependencies([
+    { path:'main.tex', content:'\\def\\input@path{{配置/}{章节/}}\n\\graphicspath{{图片/}}\n\\input{快速设置}\n\\includegraphics{示意图}' },
+    { path:'配置/快速设置.tex', content:'' },
+    { path:'图片/示意图.png', content:new Uint8Array() },
+  ], 'main.tex');
+  expect(report.missingLocalFiles).toEqual([]);
+});
