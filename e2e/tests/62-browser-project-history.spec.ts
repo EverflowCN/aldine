@@ -139,3 +139,37 @@ test('local compile shows elapsed ETA and recovers exit-code-zero with no PDF', 
   await expect(eta).toHaveCount(0);
   await expect(page.locator('.browser-aldine__status-text')).toContainText('单轮编译恢复 PDF');
 });
+
+
+test('two consecutive local compilations use latest editor content and new PDF blob', async ({page}) => {
+  const manifest = Array.from({length:12}, (_,i)=>String.fromCharCode(92)+'ProvidesPackage{fixture'+i+'}').join(String.fromCharCode(10));
+  await page.route(/texlive-.*\.txt$/, route=>route.fulfill({contentType:'text/plain',body:manifest}));
+  await page.route(/busytex-cache\.mjs(?:\?.*)?$/, route=>route.fulfill({contentType:'text/javascript',body:
+    'export async function prepareBusyTeXCache(){return {coreCached:true}};export async function getBusyTeXCacheStatus(){return {coreCached:true}};'}));
+  const stub = [
+    'export class BusyTexRunner { async initialize(){} terminate(){} }',
+    'class Engine { async compile(options) {',
+    'window.__compiledSources = [...(window.__compiledSources || []), options.input];',
+    'await new Promise(done=>setTimeout(done,200));',
+    'const pdf = new TextEncoder().encode("%PDF-1.4 " + options.input);',
+    'return {success:true, exitCode:0, pdf, logs:[]};',
+    '} }',
+    'export {Engine as XeLatex,Engine as PdfLatex,Engine as LuaLatex};'
+  ].join('\n');
+  await page.route(/busytex-lib\.mjs(?:\?.*)?$/, route=>route.fulfill({contentType:'text/javascript',body:stub}));
+  await page.goto('/?local=1');
+  await page.getByTestId('browser-compile').click();
+  await expect(page.locator('.browser-aldine__status-text')).toContainText('编译成功');
+  const previous = await page.getByRole('link',{name:'下载 PDF'}).getAttribute('href');
+  await page.locator('.cm-content').fill(String.fromCharCode(92)+'documentclass{article}\nSECOND-BUILD');
+  await expect(page.locator('.cm-content')).toContainText('SECOND-BUILD');
+  await page.getByTestId('browser-compile').click();
+  await page.waitForFunction(oldUrl => {
+    const status = document.querySelector('.browser-aldine__status-text')?.textContent || '';
+    const link = document.querySelector('a[download$=".pdf"]')?.getAttribute('href');
+    return status.includes('编译成功') && !!link && link !== oldUrl;
+  }, previous, {timeout:15000});
+  const sources = await page.evaluate(() => (window as any).__compiledSources as string[]);
+  expect(sources).toHaveLength(2);
+  expect(sources[1]).toContain('SECOND-BUILD');
+});
