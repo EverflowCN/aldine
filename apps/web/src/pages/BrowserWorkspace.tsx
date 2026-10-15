@@ -590,7 +590,7 @@ export default function BrowserWorkspace() {
             : /(?:out of memory|memory access out of bounds|TeX capacity exceeded)/i.test(diagnosticLog)
               ? '内存或 TeX 容量不足，尝试减少单次编译页数。'
               : '请查看下面的详细日志，定位出错的宏包或 LaTeX 命令。';
-        setState('编译失败（退出码：' + (result.exitCode ?? '未知') + '）。' + hint);
+        setState('编译失败（' + (result.exitCode ? '退出码：' + result.exitCode : '未生成 PDF') + '）。' + hint);
         return;
       }
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);

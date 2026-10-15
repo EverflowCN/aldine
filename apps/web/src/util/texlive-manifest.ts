@@ -31,6 +31,17 @@ async function manifests(basePath: string): Promise<Array<Map<string, boolean>>>
         catalog.set(match[1].trim().toLowerCase(), true);
       }
       if (catalog.size < 10) throw Error(coll.file + ': unexpected empty package inventory');
+      // Provides metadata omits real packages such as tikz. The pinned installed
+      // filename list is authoritative for ordinary projects as well as Everflow.
+      try {
+        const files = await fetch(key + '/texlive-' + coll.tier + '.txt', { cache: 'force-cache', signal: AbortSignal.timeout(10000) });
+        if (files.ok) {
+          for (const line of (await files.text()).split(/\r?\n/)) {
+            const name = line.trim().match(/\/([^/]+)\.sty$/i)?.[1];
+            if (name) catalog.set(name.toLowerCase(), true);
+          }
+        }
+      } catch { /* Provides metadata remains usable if a file list is unavailable. */ }
       return catalog;
     })).catch(err => {
       manifestPromise = null; // permit retry after transient network failure
