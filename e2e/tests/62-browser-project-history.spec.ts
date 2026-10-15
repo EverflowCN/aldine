@@ -21,7 +21,8 @@ test('ZIP history retains separate projects, original cache deletion and trash c
   const alpha=dialog.locator('.texpage-console__record').filter({has:page.getByRole('button',{name:'工程甲',exact:true})});
   const beta=dialog.locator('.texpage-console__record').filter({has:page.getByRole('button',{name:'工程乙',exact:true})});
   const act = async (row: typeof alpha, label: string) => {
-    await row.locator('summary').click();
+    const menu = row.locator('details');
+    if (!await menu.evaluate((node: HTMLDetailsElement) => node.open)) await row.locator('summary').click();
     await row.getByRole('button',{name:label,exact:true}).click();
   };
   await expect(alpha).toBeVisible();await expect(beta).toBeVisible();
