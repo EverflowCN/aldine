@@ -253,3 +253,124 @@
   font-variant-numeric:tabular-nums;
 }
 @media(max-width:1100px) { .browser-aldine__idle-eta { display:none; } }
+
+/* TeXPage console visual geometry, reconstructed from the two user-supplied HTML
+ * snapshots. All assets are Everflow-owned and icons are locally rendered SVG. */
+.texpage-console {
+  --bg-panel: #fff; --bg-inset: #f7f8fa; --text: #333a45;
+  --text-2: #737a85; --text-3: #9198a2; --hairline: #e6e9ed;
+  --accent: #495a80; --accent-soft: #e9edf5;
+  background: #fff; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+.texpage-console .texpage-console__header{
+  display:flex; justify-content:space-between; align-items:center;
+  height:50px; min-height:50px; padding:0 22px; border-bottom:1px solid #e5e6eb;
+  background:#fff; box-shadow:0 1px 3px #1e293b0b;
+}
+.texpage-console__brand,.texpage-console__header-links{display:flex;align-items:center;gap:13px}
+.texpage-console__wordmark{font-size:19px;font-weight:750;letter-spacing:-.6px;color:#2c3a52}
+.texpage-console__tex{color:#495a80;font-weight:500;margin-left:3px;font-family:Georgia,serif;font-size:15px}
+.texpage-console__badge{font-size:11px;color:#5a677f;padding:2px 8px;border:1px solid #dee4ef;border-radius:4px;background:#f5f7fb}
+.texpage-console__header-btn{border:0;background:transparent;color:#515a67;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:6px 10px;font-size:12px}
+.texpage-console__header-btn:hover{background:#f4f6f9;border-radius:5px;color:#283b58}
+.texpage-console__local{display:flex;align-items:center;gap:5px;color:#68758b;font-size:12px}
+.texpage-console__body{background:#f7f8fa}
+.texpage-console nav.texpage-console__sidebar{width:280px;box-sizing:border-box;flex:none;background:#fff;
+  padding:30px 22px 22px;gap:0;border-right:1px solid #e9ebf0;overflow-y:auto}
+.texpage-console__new{height:36px;border:0;border-radius:22px;background:#495a80;color:white;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;font-weight:550;
+  font-size:13px;cursor:pointer;padding:0 18px}
+.texpage-console__new:hover:not(:disabled){background:#374969}
+.texpage-console .texpage-console__sidebar>.texpage-console__new{display:flex;width:100%;margin:0 0 10px}
+.texpage-console__import{height:32px;display:flex;width:100%;gap:8px;align-items:center;justify-content:center;
+  background:#fff;border:1px solid #e2e5eb;border-radius:5px;color:#596579;cursor:pointer;font-size:12px;margin:0 0 22px}
+.texpage-console__import:hover{border-color:#8591aa;background:#f9fafc}
+.texpage-console__nav-group{display:flex;flex-direction:column;gap:4px;padding-bottom:23px;border-bottom:1px solid #eff0f3}
+.texpage-console__nav-item{display:flex;gap:10px;align-items:center;min-height:37px;width:100%;border:0;border-radius:4px;
+  color:#59606b;background:transparent;text-align:left;cursor:pointer;padding:7px 9px;font-size:13px}
+.texpage-console__nav-item span{margin-left:auto;color:#8e96a4;font-size:12px}
+.texpage-console__nav-item:hover{background:#f4f6f9}
+.texpage-console__nav-item.selected{background:#e9edf5;color:#3b4b6d;font-weight:600}
+.texpage-console__nav-heading{font-size:12px;color:#77808f;display:flex;align-items:center;justify-content:space-between;
+  padding:19px 9px 9px}
+.texpage-console__nav-tag{display:flex;align-items:center;gap:8px;padding:7px 10px;color:#6b7280;font-size:12px}
+.texpage-console__nav-tag span:last-child{margin-left:auto;color:#8e95a1}
+.texpage-console__tag-dot{width:6px;height:6px;border-radius:50%;background:#8296b4}
+.texpage-console__nav-note{display:flex;align-items:flex-start;gap:9px;font-size:11px;color:#9aa1aa;line-height:1.7;margin-top:auto;padding:24px 5px 5px}
+.texpage-console__nav-note svg{flex:none;margin-top:1px}
+.texpage-console section.texpage-console__main{display:flex;flex-direction:column;padding:0 35px 18px;
+  min-width:0;overflow-y:auto;align-items:stretch}
+.texpage-console__notice{display:flex;align-items:center;gap:9px;font-size:12px;
+  color:#637999;background:#edf4fe;border:1px solid #dfe9f9;border-radius:5px;
+  padding:10px 14px;margin:22px 0 8px;flex:none}
+.texpage-console__notice svg{flex:none}
+.texpage-console .browser-projects-tools.texpage-console__tools{display:flex;align-items:center;justify-content:space-between;
+  flex-direction:row;gap:16px;margin:0;padding:21px 0 16px;border:0;flex:none}
+.texpage-console .texpage-console__tools h2{color:#333;font-size:20px;font-weight:600;margin:0}
+.texpage-console__tools-right{display:flex;align-items:center;gap:10px}
+.texpage-console__search{height:33px;display:flex;align-items:center;gap:7px;
+  border:1px solid #e0e4ea;border-radius:5px;padding:0 9px;background:#fff;color:#7b8596}
+.texpage-console__search:focus-within{border-color:#64799c}
+.texpage-console .texpage-console__search input{width:min(27vw,260px);flex:none;border:0;outline:none;
+  background:transparent;border-radius:0;box-shadow:none;padding:0;color:#354356;font-size:12px}
+.texpage-console__tools-right select{height:33px;border:1px solid #e0e4ea;border-radius:5px;background:#fff;color:#78808e;padding:0 7px;font-size:12px}
+.texpage-console__list{display:flex;flex-direction:column;min-width:0;overflow:visible;padding-bottom:8px}
+.texpage-console__record{display:flex;align-items:flex-start;gap:10px;position:relative;background:#fff;
+  border:1px solid #e6e6e6;border-bottom:0;min-height:85px;padding:19px 22px 17px;box-sizing:border-box}
+.texpage-console__record:first-child{border-top-left-radius:6px;border-top-right-radius:6px}
+.texpage-console__record:last-of-type{border-bottom:1px solid #e6e6e6;border-bottom-left-radius:6px;border-bottom-right-radius:6px}
+.texpage-console__record:hover{background:#fafbfc}
+.texpage-console__star{border:0;cursor:pointer;display:flex;justify-content:center;align-items:center;background:transparent;
+  width:22px;height:23px;color:#a7adb7;flex:none;margin-top:-2px}
+.texpage-console__star:hover,.texpage-console__star.is-starred{color:#c29637}
+.texpage-console__star.is-starred svg{fill:#c2963755}
+.texpage-console__record-content{min-width:0;flex:1;line-height:1.5}
+.texpage-console .browser-projects-name{font-size:14px;font-weight:550;line-height:1.55;color:#414b5b;
+  text-align:left;background:transparent;border:0;padding:0;white-space:normal;overflow-wrap:anywhere}
+.texpage-console .browser-projects-name:hover{color:#495a80;text-decoration:underline}
+.texpage-console .browser-projects-current{display:inline-block;margin-left:10px}
+.texpage-console__record-meta{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;color:#85909f;font-size:11px}
+.texpage-console__record-extra{font-size:11px;color:#a0a8b3;margin-top:4px;word-break:break-all}
+.texpage-console__record-menu{position:relative;flex:none;margin-left:auto}
+.texpage-console__record-menu summary{list-style:none;width:30px;height:26px;display:flex;align-items:center;
+  justify-content:center;color:#697488;cursor:pointer;border-radius:4px}
+.texpage-console__record-menu summary::-webkit-details-marker{display:none}
+.texpage-console__record-menu summary:hover{background:#f0f2f6}
+.texpage-console__record-popover{position:absolute;right:0;top:28px;z-index:12;min-width:166px;
+  box-shadow:0 6px 22px #1c263627;background:#fff;border:1px solid #e0e4eb;border-radius:6px;
+  display:flex;flex-direction:column;padding:5px}
+.texpage-console__record-popover button{display:flex;align-items:center;gap:10px;border:0;
+  background:transparent;padding:10px;font-size:12px;text-align:left;cursor:pointer;color:#4a5669}
+.texpage-console__record-popover button:hover{background:#f0f3f8;color:#293b5a}
+.texpage-console__record-popover button:disabled{opacity:.5;cursor:default}
+.texpage-console__footer{display:flex;justify-content:space-between;margin-top:18px;font-size:11px;color:#9ca3ad}
+.texpage-console__empty{display:flex;flex-direction:column;align-items:center;gap:10px;background:#fff;
+  border:1px solid #e6e6e6;border-radius:6px;padding:65px 12px}
+.texpage-console__empty strong{color:#616b78}.texpage-console__empty p{color:#969ea8;margin:0 0 7px;font-size:12px}
+@media(max-width:980px){
+  .texpage-console nav.texpage-console__sidebar{width:210px;padding:18px 12px}
+  .texpage-console section.texpage-console__main{padding:0 18px 18px}
+}
+@media(max-width:760px){
+  .texpage-console .texpage-console__header{height:50px;min-height:50px;padding:0 12px}
+  .texpage-console__wordmark{font-size:17px}.texpage-console__badge{display:none}
+  .texpage-console__local{display:none}
+  .texpage-console__body{flex-direction:column}
+  .texpage-console nav.texpage-console__sidebar{width:100%;padding:10px;display:flex;flex-direction:row;
+    overflow-x:auto;overflow-y:hidden;flex:none;gap:6px;border-bottom:1px solid #eceff4}
+  .texpage-console .texpage-console__sidebar>.texpage-console__new,.texpage-console__import{width:auto;flex:none;
+    min-height:32px;height:32px;margin:0;padding:0 12px}
+  .texpage-console__nav-group{display:flex;flex-direction:row;flex:none;gap:3px;padding:0;border:0}
+  .texpage-console__nav-item{white-space:nowrap;padding:4px 7px;width:auto;min-height:32px;font-size:12px}
+  .texpage-console__nav-item span{display:none}
+  .texpage-console__nav-heading,.texpage-console__nav-tag,.texpage-console__nav-note{display:none}
+  .texpage-console section.texpage-console__main{padding:0 10px 12px;min-height:0}
+  .texpage-console__notice{margin:10px 0 0;padding:8px 10px;font-size:11px}
+  .texpage-console .browser-projects-tools.texpage-console__tools{flex-wrap:wrap;gap:8px;padding:14px 0 10px}
+  .texpage-console .texpage-console__tools h2{font-size:17px}
+  .texpage-console__tools-right{width:100%}
+  .texpage-console__search{flex:1}.texpage-console .texpage-console__search input{width:100%;min-width:0;flex:1}
+  .texpage-console__record{padding:14px 8px;min-height:84px}
+  .texpage-console__record-meta{gap:6px 11px}
+  .texpage-console__record-extra{font-size:10px}
+}
