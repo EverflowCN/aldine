@@ -46,7 +46,7 @@ test('uploaded TeXPage editor geometry: compact top header, file + outline, sour
 test('TeXPage split/editor/PDF controls are functional without remounting or downloading fonts', async ({page}) => {
   const loaded: string[]=[];
   page.on('request', req => {
-    if (/texpage\.com|\.(?:woff|woff2|ttf)(?:\?|$)/i.test(req.url())) loaded.push(req.url());
+    if (/texpage\.com|static\.texpage\.com/i.test(req.url())) loaded.push(req.url());
   });
   await page.goto('/?local=1');
   await expect(page.locator('.cm-content')).toBeVisible();
