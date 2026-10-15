@@ -181,6 +181,9 @@ export default function BrowserWorkspace() {
   const [compilePhase, setCompilePhase] = useState<CompilePhase>('checking');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const startedAtRef = useRef(0);
+  const phaseStartedAtRef = useRef(0);
+  const currentPhaseRef = useRef<CompilePhase>('checking');
+  const phaseTotalsRef = useRef<Partial<Record<CompilePhase, number>>>({});
   const compileLock = useRef(false);
   const [pdfWidth, setPdfWidth] = useState(() => Math.max(330, Math.round(window.innerWidth * .40)));
   const [resizing, setResizing] = useState(false);
@@ -503,6 +506,17 @@ export default function BrowserWorkspace() {
     auditWorkspaceFiles(workspace.files, workspace.rootFile);
   }
 
+  function enterCompilePhase(next: CompilePhase): void {
+    const now = performance.now();
+    if (phaseStartedAtRef.current > 0) {
+      const prior = currentPhaseRef.current;
+      phaseTotalsRef.current[prior] = (phaseTotalsRef.current[prior] || 0) + Math.max(0, now - phaseStartedAtRef.current);
+    }
+    currentPhaseRef.current = next;
+    phaseStartedAtRef.current = now;
+    setCompilePhase(next);
+  }
+
   async function compile(): Promise<void> {
     if (busy || compileLock.current) return;
     const main = workspace.files.find((f) => f.path === workspace.rootFile);
@@ -510,6 +524,9 @@ export default function BrowserWorkspace() {
     compileLock.current = true;
     const started = performance.now();
     startedAtRef.current = started;
+    phaseStartedAtRef.current = started;
+    currentPhaseRef.current = 'checking';
+    phaseTotalsRef.current = {};
     setElapsedSeconds(0);
     setCompilePhase('checking');
     const candidateTier = resourceTier === 'auto' ? 'basic' : resourceTier;
@@ -536,7 +553,7 @@ export default function BrowserWorkspace() {
           if (ranks[required.suggested] > ranks[effectiveTier]) effectiveTier = required.suggested;
         } catch { /* An offline catalog never prevents XeLaTeX. */ }
       }
-      setCompilePhase('loading');
+      enterCompilePhase('loading');
       const bundles = effectiveTier === 'extra'
         ? [BUSYTEX_ASSETS + '/texlive-recommended.js', BUSYTEX_ASSETS + '/texlive-extra.js']
         : effectiveTier === 'recommended' ? [BUSYTEX_ASSETS + '/texlive-recommended.js'] : [];
@@ -562,7 +579,7 @@ export default function BrowserWorkspace() {
         warmStart = Boolean(status?.coreCached && dataReady && optionalReady);
         setCompileEstimate(estimateCompileTime(workspace.files, effectiveTier, warmStart,
           warmStart ? readCompileHistory(historyKey(workspace.files, effectiveTier)) : undefined));
-        setCompilePhase('initializing');
+        enterCompilePhase('initializing');
         setState((status?.coreCached || dataReady)
           ? '正在从本地缓存恢复 XeLaTeX 引擎（仍需初始化 WebAssembly）…'
           : '首次加载编译资源；预计时间包含下载，实际取决于网络速度…');
@@ -587,8 +604,20 @@ export default function BrowserWorkspace() {
           setCacheHint(cache.coreCached ? '编译资源已保存在本机浏览器中。' : '编译资源缓存写入中或被浏览器存储策略限制。')
         )
       ).catch(() => {});
-      setCompilePhase('compiling');
-      setState('编译中：' + workspace.engine + '（计算在你的浏览器内进行；预计时长仅供参考）…');
+      // Runtime initialization can take tens of seconds on Windows even with
+      // 120 MB of cached WASM/data. ETA must include the *measured* startup
+      // time before estimating how long actual XeLaTeX work may take.
+      const alreadyElapsed = Math.ceil((performance.now() - started) / 1000);
+      const typesetEstimate = estimateCompileTime(workspace.files, effectiveTier, true,
+        readCompileHistory(historyKey(workspace.files, effectiveTier)));
+      setCompileEstimate({
+        ...typesetEstimate,
+        lowSeconds: alreadyElapsed + typesetEstimate.lowSeconds,
+        highSeconds: alreadyElapsed + typesetEstimate.highSeconds,
+        expectedSeconds: alreadyElapsed + typesetEstimate.expectedSeconds,
+      });
+      enterCompilePhase('compiling');
+      setState('编译中：' + workspace.engine + '（运行时已准备，用时 ' + formatCompileTime(alreadyElapsed) + '；正在实际排版）…');
       const others = workspace.files.filter((f) => f.path !== workspace.rootFile);
       // BusyTeX's default 180-second worker watchdog killed the private
       // Everflow preamble even when the worker had not crashed. Its existing
@@ -615,7 +644,7 @@ export default function BrowserWorkspace() {
         setState('未收到 PDF，正在尝试单轮直接编译…');
         result = await engineRef.current[workspace.engine].compile({ ...options, rerun: false });
       }
-      setCompilePhase('finishing');
+      enterCompilePhase('finishing');
       // BusyTeX's top-level log can be empty even when its stage logs
       // contain the actual XeLaTeX error. Preserve stage stdout/stderr and
       // missing-font information for the LOCAL browser user only.
@@ -655,9 +684,15 @@ export default function BrowserWorkspace() {
       setCompileStatus('ok');
       setShowLog(false);
       const duration = Math.round((performance.now() - started) / 1000);
-      if (warmStart) saveCompileHistory(historyKey(workspace.files, effectiveTier), duration);
+      const typesetSeconds = Math.round((phaseTotalsRef.current.compiling || 0) / 1000);
+      const preparationSeconds = Math.max(0, duration - typesetSeconds);
+      // Record the actual typesetting phase, not the WASM download/startup.
+      // A cached file still needs to instantiate its runtime on every new tab.
+      if (typesetSeconds >= 4) saveCompileHistory(historyKey(workspace.files, effectiveTier), typesetSeconds);
       setElapsedSeconds(duration);
-      setState('编译成功，耗时 ' + formatCompileTime(duration) + '（含资源加载）。' +
+      setState('编译成功，总耗时 ' + formatCompileTime(duration) +
+        '（资源检查与引擎初始化 ' + formatCompileTime(preparationSeconds) +
+        '；XeLaTeX 排版 ' + formatCompileTime(typesetSeconds) + '）。' +
         (recoveryNote ? ' 已通过单轮编译恢复 PDF；请检查目录和交叉引用。' : ''));
     } catch (err: unknown) {
       setCompileStatus('error');
@@ -736,9 +771,9 @@ export default function BrowserWorkspace() {
         <button className="btn browser-aldine__minor" type="button" data-testid="preflight-open" onClick={auditWorkspace}>检查模板依赖</button>
         <div className="toolbar__group">
           {compileStatus !== 'compiling' && <span className="browser-aldine__idle-eta"
-            title="仅估计已缓存资源后的编译时间。首次使用还需要下载编译器与宏包，实际耗时取决于设备。"
+            title="这是 XeLaTeX 排版的估计时间，不含打开页面后初始化 WebAssembly 引擎的时间；缓存资源仍需重新初始化。"
             data-testid="precompile-eta">
-            预估 {formatCompileTime(idleEstimate.lowSeconds)}～{formatCompileTime(idleEstimate.highSeconds)}
+            排版预估 {formatCompileTime(idleEstimate.lowSeconds)}～{formatCompileTime(idleEstimate.highSeconds)}
           </span>}
           <button className="btn btn--primary" onClick={() => void compile()} disabled={!ready || busy}
             aria-busy={busy} data-testid="browser-compile" title="浏览器 XeLaTeX 编译（Ctrl/⌘ + S）">
@@ -750,9 +785,10 @@ export default function BrowserWorkspace() {
 
       {compileStatus === 'compiling' && compileEstimate && <div className="browser-aldine__compile-progress" role="timer" aria-label="本地编译预计时间" data-testid="compile-eta">
         <span className="browser-aldine__phase">{phaseName[compilePhase]}</span>
-        <span>已用 {formatCompileTime(elapsedSeconds)}</span>
+        <span>总计 {formatCompileTime(elapsedSeconds)}</span>
+        <span data-testid="compile-phase-time">本阶段 {formatCompileTime(Math.max(0, (performance.now() - phaseStartedAtRef.current) / 1000))}</span>
         <strong>{describeCompileEstimate(compileEstimate, elapsedSeconds)}</strong>
-        <span className="browser-aldine__estimate-note">仅估算 · 首次加载/字体缓存可能较慢</span>
+        <span className="browser-aldine__estimate-note">资源已缓存不代表引擎已启动；WASM 初始化及字体加载速度取决于设备</span>
       </div>}
       <div className="browser-aldine__info" role="status">
         <span className="browser-aldine__status-text" title={statusMessage}>{statusMessage}</span>
