@@ -69,3 +69,24 @@ test('empty folders, moves, root changes and ZIP roundtrip survive reload', asyn
   await expect(page.locator('.browser-aldine__status-text')).toContainText('ZIP 已导入');
   await expect(page.getByTestId('folder-空文件夹')).toBeVisible();
 });
+
+test('repairs an already-saved legacy Chinese root filename', async ({ page }) => {
+  await page.evaluate(async () => {
+    const legacy = String.fromCharCode(0xd6,0xd0,0xce,0xc4) + '.tex';
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('everflow-aldine-browser-v1', 1);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result, tx = db.transaction('data','readwrite');
+        tx.objectStore('data').put({name:'旧工程',rootFile:legacy,engine:'xelatex',files:[{path:legacy,content:'\\documentclass{article}'}]},'workspace');
+        tx.oncomplete=()=>{db.close();resolve();}; tx.onerror=()=>reject(tx.error);
+      };
+    });
+  });
+  await page.reload();
+  await expect(page.getByRole('button',{name:'修复旧中文名称',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'修复旧中文名称',exact:true}).click();
+  await expect(page.getByTestId('file-中文.tex')).toBeVisible();
+  await expect(page.getByRole('combobox',{name:'主文档'})).toHaveValue('中文.tex');
+  await expect(page.getByTestId('active-file')).toHaveText('中文.tex');
+});
