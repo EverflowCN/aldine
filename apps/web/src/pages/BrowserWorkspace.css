@@ -374,3 +374,149 @@
   .texpage-console__record-meta{gap:6px 11px}
   .texpage-console__record-extra{font-size:10px}
 }
+
+/* TeXPage editor geometry from user-provided full-page HTML. Keep Everflow
+ * controls fully functional and local: no remote icon fonts or UI scripts. */
+.browser-aldine__toolbar{
+  height:40px;min-height:40px;max-height:40px;flex:none;
+  background:#1a1e22;color:#e8edf3;border-bottom:1px solid #30363e;
+  box-shadow:none;padding:0 8px;gap:5px;overflow:visible;
+}
+.browser-aldine__toolbar .btn{display:inline-flex;align-items:center;justify-content:center;
+  gap:5px;height:31px;min-height:0;border:0;border-radius:3px;background:transparent;
+  color:#d5dce5;font-size:12px;white-space:nowrap;padding:0 7px}
+.browser-aldine__toolbar .btn:hover:not(:disabled){background:#333b44;color:#fff}
+.browser-aldine__toolbar .btn:disabled{opacity:.5}
+.browser-aldine__toolbar .btn--primary{min-width:68px;min-height:31px;background:#495a80;color:#fff;
+  border-radius:4px;padding:0 10px;font-weight:580}
+.browser-aldine__toolbar .btn--primary:hover:not(:disabled){background:#5b6c95}
+.browser-aldine__toolbar .btn--primary svg{width:13px;height:13px}
+.browser-aldine__toolbar .browser-aldine__project{flex:0 1 210px;width:210px;max-width:25vw;
+  color:#f0f2f6;min-width:95px;height:30px;font-size:13px;font-weight:550;padding:0 8px;
+  background:transparent;border:1px solid transparent;border-radius:3px}
+.browser-aldine__toolbar .browser-aldine__project:focus{border-color:#7182a0;background:#2b303a}
+.browser-aldine__toolbar .browser-aldine__branch{display:none}
+.browser-aldine__toolbar .browser-aldine__engine{background:#262d34;border:1px solid transparent;
+  border-radius:3px;height:27px;color:#dbe0e8;font-size:11px;padding:0 5px}
+.browser-aldine__toolbar .browser-aldine__engine:hover{border-color:#495363}
+.browser-aldine__toolbar .browser-aldine__tool-label{font-size:11px;color:#9aa8b7}
+.browser-aldine__toolbar .browser-aldine__idle-eta{color:#a3b0c0;font-size:10px}
+.browser-aldine__toolbar .texpage-editor__compile{margin:0 2px;order:unset;flex:0 0 auto;white-space:nowrap}
+.browser-aldine__toolbar .toolbar__spacer{min-width:0;flex:1}
+.texpage-editor__view-menu{position:relative;flex:none;z-index:45;font-size:12px;color:#d7dee9}
+.texpage-editor__view-menu summary{height:31px;min-width:63px;padding:0 7px;gap:6px;
+  display:flex;align-items:center;justify-content:center;list-style:none;cursor:pointer;border-radius:3px}
+.texpage-editor__view-menu summary::-webkit-details-marker{display:none}
+.texpage-editor__view-menu summary:hover{background:#333b44}
+.texpage-editor__view-menu summary svg:last-child{width:11px}
+.texpage-editor__view-options{position:absolute;right:0;top:38px;min-width:188px;
+  border:1px solid #4a5563;border-radius:5px;box-shadow:0 10px 28px #0007;
+  padding:5px;background:#272d35;display:flex;flex-direction:column;z-index:90}
+.texpage-editor__view-options button{display:flex;align-items:center;gap:9px;border:0;
+  color:#dce2ed;background:transparent;cursor:pointer;text-align:left;padding:9px 10px;font-size:12px}
+.texpage-editor__view-options button:hover,.texpage-editor__view-options button[aria-pressed=true]{background:#3e4b5d}
+.browser-aldine__info{background:#252b31;min-height:25px;color:#99a6b6;border-bottom:1px solid #39414c;padding:3px 10px}
+.browser-aldine__info .browser-aldine__save{color:#a8bde0}
+.browser-aldine__info .browser-aldine__cache{color:#9aa7b9}
+.browser-aldine__compile-progress{background:#2b323b;border-bottom:1px solid #3d4857;color:#bdcad8}
+.browser-aldine__compile-progress strong{color:#e2ebf7}
+.browser-aldine__workspace{background:#262d35;min-height:0}
+.browser-aldine__workspace .sidebar{width:250px;min-width:145px;flex:none;background:#242a32;color:#d5dce5;border-right:1px solid #111923}
+.browser-aldine__workspace .sidebar__tabs{height:31px;min-height:31px;background:#2c343d;flex:none}
+.browser-aldine__workspace .sidebar__tab{color:#a9b6c6;border:0;background:transparent;height:31px;font-size:12px}
+.browser-aldine__workspace .sidebar__tab--active{color:#f4f6fa;background:#303944;border-bottom:2px solid #8294b7}
+.browser-aldine__workspace .sidebar__tab:hover{color:#fff;background:#333f4d}
+.browser-aldine__workspace .sidebar__body{background:#242a32;overflow-y:auto;overflow-x:hidden}
+.texpage-editor__explorer-actions{display:flex;align-items:center;height:34px;min-height:34px;
+  padding:0 7px;gap:2px;color:#b4c0ce;border-bottom:1px solid #38404a;background:#2b323b}
+.texpage-editor__explorer-label{font-size:12px;color:#dce4ec;flex:1;padding-left:4px;font-weight:570}
+.texpage-editor__explorer-actions button{border:0;background:none;color:#aebcca;
+  width:27px;height:27px;display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;border-radius:3px}
+.texpage-editor__explorer-actions button:hover:not(:disabled){background:#465365;color:white}
+.texpage-editor__explorer-actions button:disabled{opacity:.4;cursor:default}
+.browser-aldine__workspace .sidebar .browser-aldine__root{color:#9eadbe;margin:11px 10px 7px;font-size:11px}
+.browser-aldine__workspace .sidebar .browser-aldine__tree-row{border-radius:2px;color:#d1dae7;margin:1px 5px}
+.browser-aldine__workspace .sidebar .browser-aldine__tree-row:hover{background:#333e4d}
+.browser-aldine__workspace .sidebar .browser-aldine__tree-row--active{background:#4a5870}
+.browser-aldine__workspace .sidebar .tree__item{background:transparent;color:inherit;border:0;font-size:12px;font-weight:400}
+.browser-aldine__workspace .sidebar .tree__item:hover{background:transparent;color:#f2f5f9}
+.browser-aldine__workspace .sidebar .tree__root-tag{background:#4c576e;color:#e8edf8}
+.browser-aldine__workspace .sidebar .browser-aldine__tree-more{color:#a1afc0}
+.browser-aldine__workspace .sidebar .browser-aldine__file-search{padding:6px 10px}
+.browser-aldine__workspace .sidebar .browser-aldine__file-search input{height:30px;
+  border:1px solid #414b57;border-radius:3px;background:#29313c;color:#e8edf2;font-size:12px}
+.browser-aldine__workspace .sidebar .browser-aldine__file-search input::placeholder{color:#92a1b5}
+.browser-aldine__workspace .sidebar .browser-aldine__file-search input:focus{outline:1px solid #879bb9}
+.browser-aldine__workspace .sidebar .browser-aldine__explorer-tools .btn,
+.browser-aldine__workspace .sidebar .browser-aldine__actions .btn{color:#b6c2d0;background:transparent;font-size:11px}
+.browser-aldine__workspace .sidebar .browser-aldine__explorer-tools .btn:hover,
+.browser-aldine__workspace .sidebar .browser-aldine__actions .btn:hover{background:#394656;color:#fff}
+.browser-aldine__workspace .sidebar .browser-aldine__folder-target,
+.browser-aldine__workspace .sidebar .browser-aldine__settings{background:#242a32;border-top:1px solid #39414d;color:#b1c0d0}
+.browser-aldine__workspace .sidebar .browser-aldine__settings select{background:#303945;color:#e8edf7;border-color:#48566a}
+.browser-aldine__workspace .sidebar .browser-aldine__settings p{color:#96a3b3}
+.browser-aldine__workspace .browser-aldine__outline{background:#242a32;color:#bec9d5;border-top:1px solid #414c5b}
+.browser-aldine__workspace .browser-aldine__outline h3{color:#dfe6f0;margin:0 10px 6px;display:flex;align-items:center;gap:5px}
+.browser-aldine__workspace .browser-aldine__outline .btn{background:transparent;border:0;
+  color:#b8c3d2;font-size:12px;border-radius:2px;min-height:26px;height:26px}
+.browser-aldine__workspace .browser-aldine__outline .btn:hover{background:#3a4658;color:#fff}
+.browser-aldine__workspace .browser-aldine__outline p{color:#909eae}
+.browser-aldine__source{background:#fff;--bg-panel:#fff;--text:#2e3540;--text-2:#77818e;border:none}
+.browser-aldine__source .pane__header{height:32px;min-height:32px;background:#2a3036;color:#dce4ec;border:0;
+  border-bottom:1px solid #505962;font-size:12px}
+.browser-aldine__source .pane__header .statusbar__file{display:inline-flex;align-items:center;gap:6px;color:#e3e9f1}
+.browser-aldine__source .pane__header .btn{height:27px;background:transparent;color:#cad5e4;border:0;font-size:11px;display:inline-flex;align-items:center;gap:4px}
+.browser-aldine__source .pane__header .btn:hover{background:#3e4a57;color:#fff}
+.browser-aldine__source .pane__header .pdf-status{color:#9eacb9}
+.browser-aldine__source .cm-scroller{font-size:13px;line-height:1.55}
+.browser-aldine__source .cm-gutters{background:#f7f9fb;color:#9da8b5}
+.browser-aldine__workspace .resizer{width:7px;min-width:7px;border-left:0;border-right:0;background:#20262d;cursor:col-resize}
+.browser-aldine__workspace .resizer:hover{background:#3e4b60}
+.browser-aldine__preview{background:#292f37;color:#dce4ee}
+.browser-aldine__preview-head{height:32px;min-height:32px;background:#2a3036;border-bottom:1px solid #48515c;
+  padding:2px 7px;color:#dce2ed;gap:4px}
+.browser-aldine__preview-head .btn{display:inline-flex;align-items:center;gap:5px;
+  height:27px;border:0;background:transparent;color:#c4ccd7;font-size:12px}
+.browser-aldine__preview-head .btn:hover{background:#3d4858;color:#fff}
+.browser-aldine__preview-head .browser-aldine__output-tabs .btn[aria-selected=true]{color:#fff;border-bottom:2px solid #afbdd3;background:#343d49}
+.browser-aldine__preview-head .pdf-status{color:#aebaca}
+.browser-aldine__preview-head .browser-aldine__preview-mode select{height:25px;max-width:145px;background:#303a47;color:#dce4ef;border-color:#424c59;font-size:11px}
+.browser-aldine__preview .browser-aldine__pdf-content{background:#515b67}
+.browser-aldine__preview .browser-ws__empty{background:#525d6d;color:#d5dee8}
+.browser-aldine__preview .browser-aldine__log-panel pre{background:#292f38;color:#bdc7d5}
+.browser-aldine__workspace--editor .browser-aldine__preview,
+.browser-aldine__workspace--editor .resizer{display:none!important}
+.browser-aldine__workspace--editor .browser-aldine__source{flex:1 1 auto!important}
+.browser-aldine__workspace--pdf .sidebar,
+.browser-aldine__workspace--pdf .resizer,
+.browser-aldine__workspace--pdf .browser-aldine__source{display:none!important}
+.browser-aldine__workspace--pdf .browser-aldine__preview{width:auto!important;min-width:0!important;flex:1 1 auto!important}
+.texpage-editor__statusline{display:flex;align-items:center;gap:15px;height:23px;min-height:23px;flex:none;
+  background:#252d35;border-top:1px solid #414b57;color:#aab7c7;padding:0 10px;font-size:10px}
+.texpage-editor__statusline>span{display:inline-flex;align-items:center;gap:5px;min-width:0}
+.texpage-editor__statusline>span:first-child{max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.texpage-editor__statusline-spacer{flex:1}
+@media(max-width:1270px){
+  .browser-aldine__toolbar .browser-aldine__tool-label{display:none}
+  .browser-aldine__toolbar .browser-aldine__idle-eta{display:none}
+  .browser-aldine__toolbar .browser-aldine__minor{font-size:11px;padding:0 5px}
+  .browser-aldine__toolbar .browser-aldine__project{flex-basis:160px;width:160px}
+}
+@media(max-width:1050px){
+  .browser-aldine__toolbar .browser-aldine__minor{display:none}
+  .browser-aldine__toolbar .texpage-editor__projects{font-size:0;width:32px;padding:0}
+  .browser-aldine__toolbar .texpage-editor__projects svg{flex:none}
+  .browser-aldine__toolbar .browser-aldine__project{max-width:22vw}
+}
+@media(max-width:760px){
+  .browser-aldine__toolbar{height:44px;min-height:44px;max-height:none;gap:4px}
+  .browser-aldine__toolbar .browser-aldine__project{flex:1 1 auto;width:100%;max-width:none}
+  .browser-aldine__toolbar .toolbar__spacer,.browser-aldine__toolbar .browser-aldine__engine{display:none}
+  .browser-aldine__toolbar .texpage-editor__compile{order:0}
+  .texpage-editor__view-menu summary{min-width:31px;font-size:0}
+  .texpage-editor__view-menu summary>span{display:none}
+  .browser-aldine__workspace .sidebar{width:100%;min-width:0;max-height:290px}
+  .browser-aldine__workspace--pdf .browser-aldine__preview{min-height:70vh}
+  .texpage-editor__statusline{padding:0 6px;gap:8px;font-size:10px}
+}
