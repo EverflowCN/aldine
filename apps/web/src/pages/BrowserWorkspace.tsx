@@ -832,7 +832,7 @@ export default function BrowserWorkspace() {
             <div className="texpage-editor__explorer-actions" role="toolbar" aria-label="文件目录快捷操作">
               <span className="texpage-editor__explorer-label">文件目录</span>
               <button type="button" title="新建文件" aria-label="新建源文件（快捷）" disabled={busy} onClick={createFile}><TexPageIcon name="filePlus" /></button>
-              <button type="button" title="新建文件夹" aria-label="新增文件夹（快捷）" disabled={busy} onClick={createFolder}><TexPageIcon name="folderPlus" /></button>
+              <button type="button" title="新建文件夹" aria-label="新增文件夹（快捷）" data-testid="create-folder" disabled={busy} onClick={createFolder}><TexPageIcon name="folderPlus" /></button>
               <button type="button" title="上传文件" aria-label="上传资源文件（快捷）" disabled={busy} onClick={() => uploadRef.current?.click()}><TexPageIcon name="upload" /></button>
               <button type="button" title="搜索文件" aria-label="定位文件搜索框" onClick={() => document.querySelector<HTMLInputElement>('.browser-aldine__file-search input')?.focus()}><TexPageIcon name="search" /></button>
             </div>
@@ -855,7 +855,7 @@ export default function BrowserWorkspace() {
               <summary><TexPageIcon name="more" /> 更多文件操作 <TexPageIcon name="chevronDown" /></summary>
             <div className="tree__actions browser-aldine__actions">
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={createFile}>新建文件</button>
-              <button className="btn btn--ghost btn--small" data-testid="create-folder" disabled={busy} onClick={createFolder}>新建文件夹</button>
+              <button className="btn btn--ghost btn--small" disabled={busy} onClick={createFolder}>新建文件夹</button>
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => folderUploadRef.current?.click()}>上传文件夹</button>
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => uploadRef.current?.click()}>↑ 上传</button>
               <button className="btn btn--ghost btn--small" disabled={busy} onClick={() => zipRef.current?.click()}>导入 ZIP</button>
