@@ -7,6 +7,7 @@ All notable changes to Aldine are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Browser projects retain uploaded ZIP records, original ZIP backups and editable snapshots, with project switching, cache deletion and a recoverable trash list.
 - Browser-local projects now have a searchable folder tree, empty folders, folder upload, and file/folder rename and move controls.
 - The divider between editor and preview can be dragged with a finger or a
   pen, moved with the arrow keys (Shift for larger steps) and reset with a
@@ -19,6 +20,7 @@ All notable changes to Aldine are documented here. The format follows
   an Undo button.
 
 ### Changed
+- Local-editor startup defers the server app, CodeMirror and PDF.js, and prepares TeX runtime resources only when compilation is requested.
 - Every control responds on press, not on release, and shows keyboard focus.
 - Menus, the command palette and notifications are translucent surfaces that
   open from their trigger; notifications slide out the way they came in and

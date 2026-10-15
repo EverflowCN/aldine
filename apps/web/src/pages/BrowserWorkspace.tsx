@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { BASE_PATH } from '../basePath';
-import OfflineCodePane from '../components/OfflineCodePane';
-import PdfPane from '../components/PdfPane';
+const OfflineCodePane = lazy(() => import('../components/OfflineCodePane'));
+const PdfPane = lazy(() => import('../components/PdfPane'));
 import { IconChevronLeft } from '../components/Icons';
 import { toggleTheme } from '../theme';
 import { scanLatexDependencies } from '../util/latex-preflight';
@@ -12,12 +12,15 @@ import { diagnoseCompileLog } from '../util/latex-compile-diagnostics';
 import type { CompileIssue } from '../util/latex-compile-diagnostics';
 import BrowserFileTree from '../components/BrowserFileTree';
 import { readZipNames, decodeProjectText, safeProjectPath, projectFolders, chooseRoot, unwrapProject, parentFolders, repairLegacyPath } from '../util/latex-project-files';
+import BrowserProjects from '../components/BrowserProjects';
+import { createProject, listProjects, loadProject, saveProject, projectZip, deleteZipCache, deleteProject, setProjectStatus } from '../util/browser-projects';
+import type { LocalProject, ProjectRecord } from '../util/browser-projects';
 import './BrowserWorkspace.css';
 
 // Browser-only projects deliberately bypass Aldine's server-only API, auth and Yjs.
 type Engine = 'xelatex' | 'pdflatex' | 'lualatex';
 type UserFile = { path: string; content: string | Uint8Array };
-type Workspace = { name: string; rootFile: string; engine: Engine; files: UserFile[]; folders?: string[] };
+type Workspace = LocalProject;
 type BusyLogEntry = { cmd?: string; log?: string; texmflog?: string; missfontlog?: string; stdout?: string; stderr?: string; exit_code?: number };
 type BusyCompiler = { compile(options: Record<string, unknown>): Promise<{ success: boolean; pdf?: Uint8Array; log?: string; logs?: BusyLogEntry[]; exitCode?: number }> };
 type BusyRunner = { initialize(useWorker?: boolean): Promise<void>; terminate(): void };
@@ -74,15 +77,25 @@ async function dbOpen(): Promise<IDBDatabase> {
     r.onerror = () => reject(r.error);
   });
 }
-async function readWorkspace(): Promise<Workspace | null> {
+let startupRead: Promise<Workspace | null> | undefined;
+function readWorkspace(): Promise<Workspace | null> {
+  return startupRead ||= restoreWorkspace();
+}
+async function restoreWorkspace(): Promise<Workspace | null> {
   const db = await dbOpen();
   try {
     const tx = db.transaction('data', 'readonly');
     const value = await request(tx.objectStore('data').get(DB_KEY));
-    return value && Array.isArray(value.files) ? value as Workspace : null;
+    if (value?.projectId) return await loadProject(value.projectId);
+    if (!value || !Array.isArray(value.files)) return null;
+    if (value.name === 'Everflow 本地 LaTeX 工程' && value.files.length === 1 && value.files[0].path === 'main.tex' && value.files[0].content === TEST_SOURCE && !value.folders?.length) return value as Workspace;
+    const migrated = await createProject(value as Workspace);
+    await persistWorkspace(migrated);
+    return migrated;
   } finally { db.close(); }
 }
 async function persistWorkspace(w: Workspace): Promise<void> {
+  if (w.projectId && !await saveProject(w)) return;
   const db = await dbOpen();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -90,7 +103,7 @@ async function persistWorkspace(w: Workspace): Promise<void> {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
-      tx.objectStore('data').put(w, DB_KEY);
+      tx.objectStore('data').put(w.projectId ? { projectId: w.projectId } : w, DB_KEY);
     });
   } finally { db.close(); }
 }
@@ -119,6 +132,8 @@ export default function BrowserWorkspace() {
   const [selectedFolder, setSelectedFolder] = useState('');
   const folderUploadRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
+  const [showProjects, setShowProjects] = useState(false);
+  const [projectRecords, setProjectRecords] = useState<ProjectRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState('正在读取本地工程…');
   const [errorLog, setErrorLog] = useState('');
@@ -151,7 +166,7 @@ export default function BrowserWorkspace() {
   const [pdfWidth, setPdfWidth] = useState(() => Math.max(330, Math.round(window.innerWidth * .40)));
   const [resizing, setResizing] = useState(false);
   const clampPdf = (w: number) => Math.min(Math.max(260, w), Math.max(280, window.innerWidth - (sidebarHidden ? 390 : 540)));
-  const [cacheHint, setCacheHint] = useState('正在检查编译资源缓存…');
+  const [cacheHint, setCacheHint] = useState('编译资源在首次编译时按需加载');
   const cacheSetup = useRef<Promise<any> | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const zipRef = useRef<HTMLInputElement>(null);
@@ -192,49 +207,81 @@ export default function BrowserWorkspace() {
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [workspace, ready]);
 
-  useEffect(() => {
-    let mounted = true;
-    cacheSetup.current = import(/* @vite-ignore */ BASE_PATH + '/busytex-cache.mjs')
-      .then(async (lib) => {
-        const cache = await lib.prepareBusyTeXCache((progress: { phase: string; granted?: boolean; file?: string; message?: string }) => {
-          if (!mounted) return;
-          if (progress.phase === 'evicted') setCacheHint('检测到本机编译资源被清理，正在自动恢复…');
-          if (progress.phase === 'repairing') setCacheHint('自动补全缺失的编译资源：' + (progress.file || ''));
-          if (progress.phase === 'restored') setCacheHint('被清理的编译资源已自动恢复。');
-          if (progress.phase === 'repair-failed') setCacheHint('缓存自动修复未完成，下次编译将尝试重新获取资源。');
-          if (progress.phase === 'persistence') setCacheHint(progress.granted
-            ? '浏览器已允许持久存储；手动清理网站数据仍会删除缓存。'
-            : '浏览器尚未授予持久存储；资源仍会自动缓存，但可能被系统清理。');
-        });
-        // Emscripten can already hold TeX Live .data in IndexedDB before our new
-        // Service Worker was introduced. Don't label that state as "downloading".
-        let legacyPackageCached = false;
-        if (!cache.coreCached) {
-          try {
-            const busytex = await import(/* @vite-ignore */ BUSYTEX_MODULE);
-            legacyPackageCached = await busytex.isPackageCached(BUSYTEX_ASSETS + '/texlive-basic.js');
-          } catch { /* The editor remains usable without a cache-status probe. */ }
-        }
-        if (mounted) setCacheHint(cache.coreCached
-          ? cache.persistent
-            ? '已自动启用持久存储，编译资源完整，下次打开仅需初始化。'
-            : '编译资源完整且已缓存；持久存储由浏览器决定。'
-          : legacyPackageCached
-            ? '基础宏包已保存在 IndexedDB；其他资源将在编译时自动缓存。'
-            : '当前编译资源不完整，首次编译时自动补齐并保存到本机。');
-        return { ...cache, legacyPackageCached };
-      }).catch(() => {
-        if (mounted) setCacheHint('缓存功能不可用；编译仍可尝试。');
-        return null;
-      });
-    return () => { mounted = false; };
-  }, []);
+  function prepareCompileCache(): Promise<any> {
+    if (!cacheSetup.current) cacheSetup.current = import(/* @vite-ignore */ BASE_PATH + '/busytex-cache.mjs')
+      .then(lib => lib.prepareBusyTeXCache((progress: { phase: string; granted?: boolean; file?: string }) => {
+        if (progress.phase === 'repairing') setCacheHint('正在恢复编译资源：' + (progress.file || ''));
+        if (progress.phase === 'restored') setCacheHint('编译资源已恢复并缓存');
+        if (progress.phase === 'persistence') setCacheHint(progress.granted ? '编译资源将优先保存在本机' : '编译资源按需缓存');
+      })).catch(() => null);
+    return cacheSetup.current;
+  }
 
   useEffect(() => () => {
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     runnerRef.current?.terminate();
   }, []);
 
+  function resetProjectView(next: Workspace): void {
+    runnerRef.current?.terminate(); runnerRef.current = null; engineRef.current = null;
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    previewRef.current = null; setPreviewUrl(null); setCompileStatus('idle');
+    setErrorLog(''); setCompileIssues([]); setPreflight(null); setShowPreflight(false);
+    setWorkspace(next); setActive(next.rootFile); setSelectedFolder('');
+  }
+  async function flushProject(): Promise<void> {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    await persistWorkspace(latest.current);
+  }
+  async function refreshProjects(): Promise<void> { setProjectRecords(await listProjects()); }
+  async function showProjectList(): Promise<void> {
+    setBusy(true);
+    try { await flushProject(); await refreshProjects(); setShowProjects(true); }
+    catch (error) { setState('无法读取工程记录：' + String(error)); }
+    finally { setBusy(false); }
+  }
+  async function projectAction(action: () => Promise<void>): Promise<void> {
+    setBusy(true);
+    try { await action(); await refreshProjects(); }
+    catch (error) { setState('工程操作失败：' + String(error)); }
+    finally { setBusy(false); }
+  }
+  async function openSavedProject(id: string): Promise<void> {
+    await projectAction(async () => {
+      await flushProject(); const next = await loadProject(id);
+      if (!next) throw Error('工程已删除或位于回收站');
+      resetProjectView(next); await persistWorkspace(next); setShowProjects(false);
+      setState('已打开工程：' + next.name);
+    });
+  }
+  async function newProject(): Promise<void> {
+    const name = prompt('新工程名称', '未命名工程'); if (!name?.trim()) return;
+    await projectAction(async () => {
+      await flushProject(); const next = await createProject({ ...fresh(), name: name.trim() });
+      resetProjectView(next); await persistWorkspace(next); setShowProjects(false); setState('新工程已创建。');
+    });
+  }
+  async function trashProject(id: string): Promise<void> {
+    await projectAction(async () => {
+      if (id === workspace.projectId) await flushProject();
+      await setProjectStatus(id, 'trash');
+      if (id === workspace.projectId) { const next = fresh(); resetProjectView(next); await persistWorkspace(next); }
+      setState('工程已移入回收站，可恢复或彻底删除缓存。');
+    });
+  }
+  async function eraseProject(id: string): Promise<void> {
+    if (!confirm('彻底删除此工程、原 ZIP 和全部本地文件缓存？此操作无法恢复。')) return;
+    await projectAction(async () => { await deleteProject(id); setState('此工程的 ZIP 与文件缓存已删除。'); });
+  }
+  async function eraseZip(id: string): Promise<void> {
+    if (!confirm('删除此工程的原 ZIP 缓存？工程文件和编辑内容会保留。')) return;
+    await projectAction(async () => { await deleteZipCache(id); setState('原 ZIP 缓存已删除，工程文件已保留。'); });
+  }
+  async function downloadOriginal(id: string): Promise<void> {
+    await projectAction(async () => { const blob = await projectZip(id); if (!blob) throw Error('原 ZIP 缓存不存在');
+      saveAs(blob, projectRecords.find(r => r.id === id)?.zipName || 'project.zip');
+    });
+  }
   function update(changes: Partial<Workspace>): void {
     setWorkspace((old) => ({ ...old, ...changes }));
   }
@@ -278,7 +325,6 @@ export default function BrowserWorkspace() {
   }
   async function importZip(input: File | undefined): Promise<void> {
     if (!input) return;
-    if (!confirm('导入 ZIP 将替换当前浏览器工程。请先导出 ZIP 备份。确定继续吗？')) return;
     setBusy(true);
     setState('正在解析 ZIP 文件…');
     try {
@@ -297,12 +343,10 @@ export default function BrowserWorkspace() {
       }
       const { files, folders } = unwrapProject(imported, importedFolders);
       const root = chooseRoot(files);
-      setWorkspace({ name: input.name.replace(/\.zip$/i, '').slice(0, 100), engine: 'xelatex', rootFile: root.path, files, folders });
-      setSelectedFolder('');
-      setPreviewUrl(null);
-      setCompileStatus('idle');
-      setActive(root.path);
-      setErrorLog('');
+      await flushProject();
+      const next = await createProject({ name: input.name.replace(/\.zip$/i, '').slice(0, 100), engine: 'xelatex', rootFile: root.path, files, folders }, input);
+      await persistWorkspace(next);
+      resetProjectView(next); setShowProjects(false);
       setState('ZIP 已导入，共 ' + files.length + ' 个文件。已自动执行模板依赖检查。');
       auditWorkspaceFiles(files, root.path, true);
     } catch (err: unknown) {
@@ -440,7 +484,7 @@ export default function BrowserWorkspace() {
         // Dynamic import intentionally points to the static library built from our fork.
         const libPath = BUSYTEX_MODULE;
         // Ensure the cache-first worker controls the page before requesting WASM assets.
-        const status = await cacheSetup.current;
+        const status = await prepareCompileCache();
         const lib = await import(/* @vite-ignore */ libPath);
         const dataReady = typeof lib.isPackageCached === 'function'
           ? await lib.isPackageCached(BUSYTEX_ASSETS + '/texlive-basic.js').catch(() => false)
@@ -566,6 +610,7 @@ export default function BrowserWorkspace() {
           Only the storage/compile transport is swapped from Fastify to IndexedDB+BusyTeX. */}
       <header className="toolbar browser-aldine__toolbar">
         <a className="btn btn--ghost" href="/paper/" title="返回做题本" aria-label="返回做题本"><IconChevronLeft /></a>
+        <button className="btn" type="button" data-testid="open-projects" disabled={!ready || busy} onClick={() => void showProjectList()}>我的工程</button>
         <input className="toolbar__name browser-aldine__project" value={workspace.name}
           aria-label="项目名称" onChange={(e) => update({ name: e.target.value.slice(0, 100) })} />
         <span className="browser-aldine__branch" title="工程保存在当前浏览器，不通过服务器同步">本地项目</span>
@@ -667,8 +712,8 @@ export default function BrowserWorkspace() {
             <span className="pdf-status">{lineCount} 行</span>
           </div>
           {textFile
-            ? <OfflineCodePane key={active} path={active} value={textFile.content}
-                onChange={(value) => updateFile(active, value)} onCompile={() => void compile()} />
+            ? <Suspense fallback={<div className="browser-editor-loading">正在准备编辑器…</div>}><OfflineCodePane key={active} path={active} value={textFile.content}
+                onChange={(value) => updateFile(active, value)} onCompile={() => void compile()} /></Suspense>
             : <div className="pdf-empty"><p>{current ? '二进制资源不能直接编辑，可在编译时引用。' : '选择文件开始编辑。'}</p></div>}
         </main>
 
@@ -723,14 +768,11 @@ export default function BrowserWorkspace() {
               download={(workspace.name || 'everflow').replace(/[\\/:*?"<>|]/g, '-') + '.pdf'}>下载 PDF</a>}
             <button className="btn btn--ghost btn--small" onClick={() => setShowLog((v) => !v)}>日志</button>
           </div>
-          {pdfRenderer === 'native' && previewUrl
-            ? <iframe key={previewUrl} className="browser-aldine__native-pdf"
-                title="浏览器原生 PDF 预览（兼容中文嵌入字体）" data-testid="pdf-native"
-                src={previewUrl} />
-            : <PdfPane pdfUrl={previewUrl} branch="local" status={compileStatus} zoom={zoom}
-                locale="zh" stale={compileStatus === 'error' && !!previewUrl} ready={ready}
-                hasTex={workspace.files.some(f => /\.tex$/i.test(f.path))}
-                onFirstOpen={() => { /* No surprise 120MB WASM download until user clicks 编译. */ }} />}
+          {!previewUrl ? <div className="browser-ws__empty" data-testid="pdf-empty"><strong>{compileStatus === 'compiling' ? '正在编译…' : 'PDF 预览'}</strong><span>点击编译后在此查看 PDF</span></div>
+            : pdfRenderer === 'native' ? <iframe key={previewUrl} className="browser-aldine__native-pdf"
+                title="浏览器原生 PDF 预览（兼容中文嵌入字体）" data-testid="pdf-native" src={previewUrl} />
+            : <Suspense fallback={<div className="browser-editor-loading">正在准备 PDF 预览…</div>}><PdfPane pdfUrl={previewUrl} branch={workspace.projectId || 'local'} status={compileStatus} zoom={zoom}
+                locale="zh" stale={compileStatus === 'error'} ready={ready} hasTex={true} onFirstOpen={() => {}} /></Suspense>}
           {pdfRenderer === 'native' && previewUrl && (
             <div className="browser-aldine__pdfhint" role="note">
               中文文字由浏览器 PDF 内核渲染。如果当前浏览器仍不显示，请点击「下载 PDF」使用系统阅读器。
@@ -809,6 +851,11 @@ export default function BrowserWorkspace() {
         </div>}
         <pre data-testid="browser-compile-log">{errorLog || '尚无编译日志。'}</pre>
       </section>}
+      {showProjects && <BrowserProjects records={projectRecords} current={workspace.projectId} pending={busy}
+        onClose={() => setShowProjects(false)} onUpload={() => zipRef.current?.click()} onNew={() => void newProject()}
+        onOpen={id => void openSavedProject(id)} onZip={id => void downloadOriginal(id)} onDeleteZip={id => void eraseZip(id)}
+        onTrash={id => void trashProject(id)} onRestore={id => void projectAction(async () => { await setProjectStatus(id, 'active'); })}
+        onDelete={id => void eraseProject(id)} />}
       <input ref={folderUploadRef} type="file" multiple hidden {...{ webkitdirectory: '', directory: '' }} onChange={async e => {
         await addFiles(e.target.files); e.target.value = '';
       }} />
