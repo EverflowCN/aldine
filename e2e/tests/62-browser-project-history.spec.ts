@@ -164,11 +164,24 @@ test('two consecutive local compilations use latest editor content and new PDF b
   await page.locator('.cm-content').fill(String.fromCharCode(92)+'documentclass{article}\nSECOND-BUILD');
   await expect(page.locator('.cm-content')).toContainText('SECOND-BUILD');
   await page.getByTestId('browser-compile').click();
-  await page.waitForFunction(oldUrl => {
-    const status = document.querySelector('.browser-aldine__status-text')?.textContent || '';
-    const link = document.querySelector('a[download$=".pdf"]')?.getAttribute('href');
-    return status.includes('编译成功') && !!link && link !== oldUrl;
-  }, previous, {timeout:15000});
+  try {
+    await page.waitForFunction(oldUrl => {
+      const status = document.querySelector('.browser-aldine__status-text')?.textContent || '';
+      const link = document.querySelector('a[download$=".pdf"]')?.getAttribute('href');
+      return status.includes('编译成功') && !!link && link !== oldUrl;
+    }, previous, {timeout:5000});
+  } catch (error) {
+    console.log('Two-pass local state:', await page.evaluate(() => ({
+      status:document.querySelector('.browser-aldine__status-text')?.textContent,
+      elapsed:document.querySelector('[data-testid="compile-eta"]')?.textContent,
+      disabled:document.querySelector('[data-testid="browser-compile"]')?.hasAttribute('disabled'),
+      href:document.querySelector('a[download$=".pdf"]')?.getAttribute('href'),
+      sources:(window as any).__compiledSources?.map((s:string)=>s.slice(0,130)),
+      editor:document.querySelector('.cm-content')?.textContent?.slice(0,130),
+      errors:document.querySelector('[data-testid="browser-compile-log"]')?.textContent?.slice(0,800)
+    })));
+    throw error;
+  }
   const sources = await page.evaluate(() => (window as any).__compiledSources as string[]);
   expect(sources).toHaveLength(2);
   expect(sources[1]).toContain('SECOND-BUILD');
