@@ -19,8 +19,8 @@ function legacyZip() {
   return Buffer.concat([...locals,directory,end]);
 }
 test.beforeEach(async ({ page }) => {
-  await page.route('**/browser-test/fflate.mjs', r=>r.fulfill({path:fflateModule,contentType:'text/javascript'}));
-  await page.route('**/busytex-cache.mjs', r=>r.fulfill({contentType:'text/javascript',body:'export async function prepareBusyTeXCache(){return {coreCached:true}}; export async function getBusyTeXCacheStatus(){return {coreCached:true}}'}));
+  await page.route(/\/browser-test\/fflate\.mjs(?:\?.*)?$/, r=>r.fulfill({path:fflateModule,contentType:'text/javascript'}));
+  await page.route(/\/busytex-cache\.mjs(?:\?.*)?$/, r=>r.fulfill({contentType:'text/javascript',body:'export async function prepareBusyTeXCache(){return {coreCached:true}}; export async function getBusyTeXCacheStatus(){return {coreCached:true}}'}));
   await page.goto('/?local=1');
   await expect(page.getByTestId('browser-compile')).toBeEnabled();
   page.on('dialog', d=>d.accept());
@@ -61,7 +61,7 @@ test('empty folders, moves, root changes and ZIP roundtrip survive reload', asyn
   await expect(page.getByTestId('folder-空文件夹')).toBeVisible();
   await expect(page.getByTestId('file-资料/正文.tex')).toBeVisible();
   const pending=page.waitForEvent('download');
-  await page.getByRole('button',{name:'导出 ZIP',exact:true}).click();
+  await page.getByRole('button',{name:'导出 ZIP',exact:true}).first().click();
   const download=await pending;const data=unzipSync(new Uint8Array(readFileSync((await download.path())!)));
   expect(Object.keys(data)).toEqual(expect.arrayContaining(['空文件夹/','资料/正文.tex','主文档.tex']));
   page.once('dialog',d=>d.accept());
