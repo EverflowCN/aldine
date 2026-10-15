@@ -357,7 +357,7 @@ export default function BrowserWorkspace() {
     setState('已导入 ' + next.length + ' 个文件，仅保存在当前浏览器。');
     } catch (error) {
       setState('文件导入失败：' + (error instanceof Error ? error.message : String(error)));
-    } finally { compileLock.current = false; setBusy(false); }
+    } finally { setBusy(false); }
   }
   async function importZip(input: File | undefined): Promise<void> {
     if (!input) return;
@@ -670,7 +670,7 @@ export default function BrowserWorkspace() {
       runnerRef.current?.terminate();
       runnerRef.current = null;
       engineRef.current = null;
-    } finally { setBusy(false); }
+    } finally { compileLock.current = false; setBusy(false); }
   }
 
   const current = workspace.files.find((f) => f.path === active);
