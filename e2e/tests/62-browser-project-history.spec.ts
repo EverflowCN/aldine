@@ -50,12 +50,12 @@ test('ZIP history retains separate projects, original cache deletion and trash c
   await expect(dialog.locator('tr').filter({hasText:'工程甲'})).toHaveCount(0);
   await expect(dialog.locator('tr').filter({hasText:'工程乙'})).toHaveCount(1);
   const storage=await page.evaluate(async()=>{
-    const req=indexedDB.open('everflow-aldine-projects-v1',1);const db=await new Promise<IDBDatabase>((ok,no)=>{req.onsuccess=()=>ok(req.result);req.onerror=()=>no(req.error)});
-    const tx=db.transaction(['index','snapshots'],'readonly');
+    const req=indexedDB.open('everflow-aldine-projects-v1');const db=await new Promise<IDBDatabase>((ok,no)=>{req.onsuccess=()=>ok(req.result);req.onerror=()=>no(req.error)});
+    const tx=db.transaction(['index','snapshots','archives'],'readonly');
     const count=(store:string)=>new Promise<number>(ok=>{const r=tx.objectStore(store).count();r.onsuccess=()=>ok(r.result)});
-    const result=await Promise.all([count('index'),count('snapshots')]);db.close();return result;
+    const result=await Promise.all([count('index'),count('snapshots'),count('archives')]);db.close();return result;
   });
-  expect(storage).toEqual([1,1]);
+  expect(storage).toEqual([1,1,1]);
 });
 test('local startup does not request collaboration, PDF.js or TeX runtime bundles', async ({ page }) => {
   const urls:string[]=[];page.on('request',r=>urls.push(r.url()));
