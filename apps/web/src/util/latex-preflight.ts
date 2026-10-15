@@ -102,7 +102,10 @@ export function scanLatexDependencies(files: PreflightFile[], rootFile: string):
     }
     for (const match of source.matchAll(inputCommands)) {
       const path = match[1].trim();
-      if (!matchesFile(names, file.path, path, ['.tex', '.sty'], inputPaths)) missing.add(path + ' ← ' + file.path);
+      // PGF/TikZ internal .code.tex files are installed by TeX Live, not ZIP chapters.
+      // Suppressing this false local-file warning does NOT claim the runtime bundle is present.
+      const isKnownRuntimeCode = /^(?:pgf|tikz)[\\w.-]*\\.code\\.tex$/i.test(path.split('/').pop() || '');
+      if (!isKnownRuntimeCode && !matchesFile(names, file.path, path, ['.tex', '.sty'], inputPaths)) missing.add(path + ' ← ' + file.path);
     }
     for (const match of source.matchAll(graphicCommands)) {
       const path = match[1].trim();
