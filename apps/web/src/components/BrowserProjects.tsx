@@ -126,7 +126,7 @@ export default function BrowserProjects(props: Props) {
                   <span>最近更新：{updated(r.updatedAt)}</span>
                 </div>
                 <div className="texpage-console__record-extra">{r.fileCount} 个文件 · {size(r.bytes+r.zipBytes)}
-                  {r.zipName && <> · 上传源：{r.zipName}</>}
+                  {r.zipName && <> · 上传源：{r.zipName}</>} · 原 ZIP：{r.zipBytes ? size(r.zipBytes) : '无缓存'}
                 </div>
               </div>
               <details className="texpage-console__record-menu">
