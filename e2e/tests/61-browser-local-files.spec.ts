@@ -45,7 +45,7 @@ test('empty folders, moves, root changes and ZIP roundtrip survive reload', asyn
   await page.getByTestId('create-folder').click();
   await expect(page.getByTestId('folder-资料')).toBeVisible();
   page.once('dialog',d=>d.accept('资料/笔记.tex'));
-  await page.getByRole('button',{name:'新建文件',exact:true}).click();
+  await page.getByRole('button',{name:'新建源文件（快捷）'}).click();
   await expect(page.getByTestId('file-资料/笔记.tex')).toBeVisible();
   page.once('dialog',d=>d.accept('资料/正文.tex'));
   await page.getByRole('button',{name:'重命名或移动 资料/笔记.tex',exact:true}).click();
@@ -84,6 +84,7 @@ test('repairs an already-saved legacy Chinese root filename', async ({ page }) =
     });
   });
   await page.reload();
+  await page.locator('.texpage-editor__more-files summary').click();
   await expect(page.getByRole('button',{name:'修复旧中文名称',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'修复旧中文名称',exact:true}).click();
   await expect(page.getByTestId('file-中文.tex')).toBeVisible();
