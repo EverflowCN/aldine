@@ -203,6 +203,7 @@ test('simple project starts in Auto Basic despite stale global Recommended and b
     'export class BusyTexRunner { constructor(config){ window.__tierConfig=config.preloadDataPackages; } async initialize(){} terminate(){} }',
     'class Engine { async compile(options) {',
     'window.__reruns = [...(window.__reruns||[]), options.rerun];',
+    'window.__remoteEndpoint = options.remoteEndpoint;',
     'return { success:true, exitCode:0, pdf:new TextEncoder().encode("%PDF-1.4 minimal"), logs:[] };',
     '} }',
     'export { Engine as XeLatex, Engine as PdfLatex, Engine as LuaLatex };'
@@ -215,11 +216,13 @@ test('simple project starts in Auto Basic despite stale global Recommended and b
   await expect(page.locator('.browser-aldine__status-text')).toContainText('编译成功');
   const result = await page.evaluate(() => ({
     bundles: (window as any).__tierConfig as string[],
-    reruns: (window as any).__reruns as boolean[]
+    reruns: (window as any).__reruns as boolean[],
+    remoteEndpoint: (window as any).__remoteEndpoint
   }));
   expect(result.bundles).toHaveLength(1);
   expect(result.bundles[0]).toMatch(/\/browser-test\/core\/busytex\/texlive-basic\.js$/);
   expect(result.reruns).toEqual([false]);
+  expect(result.remoteEndpoint).toBeUndefined();
   expect(paths).toEqual([]);
 });
 
