@@ -540,7 +540,7 @@ export default function BrowserWorkspace() {
     setShowPreflight(false);
     setShowLog(true);
     setState('正在检查编译资源缓存…');
-    setErrorLog('');
+    setErrorLog('本地 XeLaTeX 正在执行。BusyTeX 可能在排版完成后才返回正式编译日志；暂时没有日志不代表卡死。等待结果时可查看上方当前阶段和本阶段用时。');
     setCompileIssues([]);
     let warmStart = Boolean(runnerRef.current);
     try {
@@ -799,7 +799,10 @@ export default function BrowserWorkspace() {
         <span>总计 {formatCompileTime(elapsedSeconds)}</span>
         <span data-testid="compile-phase-time">本阶段 {formatCompileTime(Math.max(0, elapsedSeconds - phaseStartSecondRef.current))}</span>
         <strong>{describeCompileEstimate(compileEstimate, elapsedSeconds)}</strong>
-        <span className="browser-aldine__estimate-note">资源已缓存不代表引擎已启动；WASM 初始化及字体加载速度取决于设备</span>
+        <span className="browser-aldine__estimate-note">
+          {elapsedSeconds >= 45 ? '超出估计不等于报错；BusyTeX 可能暂不返回实时日志。' :
+            '资源已缓存不代表引擎已启动；WASM 初始化及字体加载速度取决于设备'}
+        </span>
       </div>}
       <div className="browser-aldine__info" role="status">
         <span className="browser-aldine__status-text" title={statusMessage}>{statusMessage}</span>
