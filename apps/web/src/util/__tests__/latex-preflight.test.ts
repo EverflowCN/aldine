@@ -58,3 +58,12 @@ it('resolves Chinese names, input search paths and graphicspath', () => {
   ], 'main.tex');
   expect(report.missingLocalFiles).toEqual([]);
 });
+
+it('does not mislabel PGF math internals as missing files in the uploaded ZIP', () => {
+  const project = scanLatexDependencies([
+    { path: 'main.tex', content: '\\documentclass{article}\\n\\usepackage{project-style}\\n\\begin{document}Hi\\end{document}' },
+    { path: 'project-style.sty', content: '\\ProvidesPackage{project-style}\\n\\RequirePackage{tikz}\\n\\input{pgfmathfloat.code.tex}' },
+  ], 'main.tex');
+  expect(project.packages).toContain('tikz');
+  expect(project.missingLocalFiles).toEqual([]);
+});
