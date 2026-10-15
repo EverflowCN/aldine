@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test('uploaded TeXPage console geometry: 50px header, 280px navigation and project cards', async ({page}) => {
-  await page.goto('/');
+  // Vite preview lacks the static-pages meta marker: explicitly enter local
+  // browser mode, then open the same dashboard that /latex/ shows by default.
+  await page.goto('/?local=1');
+  await page.getByTestId('open-projects').click();
   const home=page.getByTestId('project-history');
   await expect(home).toBeVisible();
   await expect(home.getByText('Everflow',{exact:false}).first()).toBeVisible();
