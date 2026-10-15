@@ -3,8 +3,8 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLi
 import { EditorState } from '@codemirror/state';
 import { syntaxHighlighting, HighlightStyle, bracketMatching, foldGutter, indentOnInput } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
+import { defaultKeymap, history, historyKeymap, indentWithTab, undo, redo, toggleComment } from '@codemirror/commands';
+import { searchKeymap, highlightSelectionMatches, openSearchPanel } from '@codemirror/search';
 import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import { latex } from 'codemirror-lang-latex';
 
@@ -13,6 +13,7 @@ import { latex } from 'codemirror-lang-latex';
 interface Props {
   path: string;
   jump?: { line: number; tick: number };
+  command?: { action: 'undo' | 'redo' | 'search' | 'comment' | 'math'; path: string; tick: number };
   value: string;
   onChange(value: string): void;
   onCompile(): void;
@@ -31,7 +32,7 @@ const theme = EditorView.theme({
   '.cm-tooltip': { backgroundColor: 'var(--bg-panel)', color: 'var(--text)', border: '1px solid var(--hairline)' },
   '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: 'var(--accent-fill)', color: 'var(--on-accent)' },
 });
-export default function OfflineCodePane({ path, value, jump, onChange, onCompile }: Props) {
+export default function OfflineCodePane({ path, value, jump, command, onChange, onCompile }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -77,5 +78,24 @@ export default function OfflineCodePane({ path, value, jump, onChange, onCompile
     instance.dispatch({ selection: { anchor: line.from }, effects: EditorView.scrollIntoView(line.from, { y: 'center' }) });
     instance.focus();
   }, [jump]);
+  useEffect(() => {
+    const instance = view.current;
+    if (!instance || !command || command.path !== path) return;
+    if (command.action === 'undo') undo(instance);
+    else if (command.action === 'redo') redo(instance);
+    else if (command.action === 'search') openSearchPanel(instance);
+    else if (command.action === 'comment') toggleComment(instance);
+    else if (command.action === 'math') {
+      const selection = instance.state.selection.main;
+      const original = instance.state.sliceDoc(selection.from, selection.to);
+      // Insert a well-formed display-math environment and place the caret inside.
+      const insertion = '\\[' + '\n' + original + '\n' + '\\]';
+      instance.dispatch({
+        changes: { from: selection.from, to: selection.to, insert: insertion },
+        selection: { anchor: selection.from + 3 }
+      });
+    }
+    instance.focus();
+  }, [command, path]);
   return <div ref={host} className="code-pane" data-testid="code-pane" />;
 }
