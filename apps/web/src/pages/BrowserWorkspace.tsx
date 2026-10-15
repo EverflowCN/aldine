@@ -13,6 +13,8 @@ import { diagnoseCompileLog } from '../util/latex-compile-diagnostics';
 import type { CompileIssue } from '../util/latex-compile-diagnostics';
 import { describeCompileEstimate, estimateCompileTime, formatCompileTime, historyKey, readCompileHistory, saveCompileHistory } from '../util/compile-estimate';
 import type { CompileEstimate, CompilePhase } from '../util/compile-estimate';
+import { resourceTierForProject, needsPackageCatalog, needsSecondPass } from '../util/compile-plan';
+import type { ResourceChoice } from '../util/compile-plan';
 import BrowserFileTree from '../components/BrowserFileTree';
 import { readZipNames, decodeProjectText, safeProjectPath, projectFolders, chooseRoot, unwrapProject, parentFolders, repairLegacyPath } from '../util/latex-project-files';
 import BrowserProjects from '../components/BrowserProjects';
@@ -152,14 +154,11 @@ export default function BrowserWorkspace() {
   const [state, setState] = useState('正在读取本地工程…');
   const [errorLog, setErrorLog] = useState('');
   const [allowPackages, setAllowPackages] = useState(true);
-  // GitHub-hosted optional TeX Live bundles. The extra 528 MiB is NEVER
-  // downloaded on first visit unless the user explicitly selects a tier.
-  const [resourceTier, setResourceTier] = useState<'basic' | 'recommended' | 'extra'>(() => {
-    try {
-      const v = localStorage.getItem('everflow.busytex.resourceTier');
-      return v === 'recommended' || v === 'extra' ? v : 'basic';
-    } catch { return 'basic'; }
-  });
+  // The old global localStorage preference persisted automatic upgrades, causing
+  // a new nine-line article to download 192 MiB of Recommended packages.
+  // "Auto" is always the starting mode for EACH project; manual choices are
+  // scoped to the currently open project, not future unrelated ZIPs.
+  const [resourceTier, setResourceTier] = useState<ResourceChoice>('auto');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [unsaved, setUnsaved] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -259,7 +258,7 @@ export default function BrowserWorkspace() {
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     previewRef.current = null; setPreviewUrl(null); setCompileStatus('idle');
     setErrorLog(''); setCompileIssues([]); setPreflight(null); setShowPreflight(false); setShowLog(false); setJump(undefined);
-    setCompileEstimate(null); setElapsedSeconds(0);
+    setCompileEstimate(null); setElapsedSeconds(0); setResourceTier('auto');
     setWorkspace(next); setActive(next.rootFile); setSelectedFolder('');
   }
   async function flushProject(): Promise<void> {
@@ -513,8 +512,9 @@ export default function BrowserWorkspace() {
     startedAtRef.current = started;
     setElapsedSeconds(0);
     setCompilePhase('checking');
-    setCompileEstimate(estimateCompileTime(workspace.files, resourceTier, Boolean(runnerRef.current),
-      runnerRef.current ? readCompileHistory(historyKey(workspace.files, resourceTier)) : undefined));
+    const candidateTier = resourceTier === 'auto' ? 'basic' : resourceTier;
+    setCompileEstimate(estimateCompileTime(workspace.files, candidateTier, Boolean(runnerRef.current),
+      runnerRef.current ? readCompileHistory(historyKey(workspace.files, candidateTier)) : undefined));
     setBusy(true);
     setCompileStatus('compiling');
     setShowPreflight(false);
@@ -525,23 +525,23 @@ export default function BrowserWorkspace() {
     let warmStart = Boolean(runnerRef.current);
     try {
       const report = scanLatexDependencies(workspace.files, workspace.rootFile);
-      // A failed/offline catalog lookup must never silently downgrade a complex
-      // Everflow/TikZ/CJK project to Basic. The static source scan is our floor.
-      let effectiveTier: 'basic' | 'recommended' | 'extra' =
-        resourceTier === 'basic' && report.recommendedTier === 'recommended' ? 'recommended' : resourceTier;
-      try {
-        const required = await assessTeXLiveCoverage(report.packages, BUSYTEX_ASSETS, workspace.files.map(f => f.path));
-        const ranks = { basic: 0, recommended: 1, extra: 2 };
-        if (ranks[required.suggested] > ranks[effectiveTier]) effectiveTier = required.suggested;
-      } catch { /* A failed metadata request must not block an offline compile. */ }
+      // Avoid the six online manifests for ordinary article/amsmath sources.
+      // Unknown packages still use the exact installed-file catalog, while
+      // CTeX/TikZ/Everflow maintain the recommended tier even when offline.
+      let effectiveTier = resourceTierForProject(resourceTier, report);
+      if (needsPackageCatalog(report, workspace.files.map(f => f.path))) {
+        try {
+          const required = await assessTeXLiveCoverage(report.packages, BUSYTEX_ASSETS, workspace.files.map(f => f.path));
+          const ranks = { basic: 0, recommended: 1, extra: 2 };
+          if (ranks[required.suggested] > ranks[effectiveTier]) effectiveTier = required.suggested;
+        } catch { /* An offline catalog never prevents XeLaTeX. */ }
+      }
       setCompilePhase('loading');
       const bundles = effectiveTier === 'extra'
         ? [BUSYTEX_ASSETS + '/texlive-recommended.js', BUSYTEX_ASSETS + '/texlive-extra.js']
         : effectiveTier === 'recommended' ? [BUSYTEX_ASSETS + '/texlive-recommended.js'] : [];
-      if (effectiveTier !== resourceTier) {
-        setResourceTier(effectiveTier);
-        try { localStorage.setItem('everflow.busytex.resourceTier', effectiveTier); } catch {}
-      }
+      // Keep UI in Auto; never persist an automatic tier upgrade globally.
+      // This prevents the next small project from inheriting 192 MiB extras.
       const signature = bundles.join('|');
       if (runnerRef.current && runnerBundles.current !== signature) {
         runnerRef.current.terminate(); runnerRef.current = null; engineRef.current = null;
@@ -602,7 +602,7 @@ export default function BrowserWorkspace() {
         input: main.content,
         additionalFiles: others,
         dataPackagesJs: bundles.length ? bundles : undefined,
-        rerun: true,
+        rerun: needsSecondPass(workspace.files),
         verbose: 'info',
         remoteEndpoint: allowPackages ? PACKAGE_SERVICE : undefined
       };
@@ -677,8 +677,17 @@ export default function BrowserWorkspace() {
   const textFile = current && isText(current) ? current : null;
   const outline = textFile ? [...textFile.content.matchAll(/^[ \t]*\\(part|chapter|section|subsection|subsubsection)\*?(?:\[[^\]]*\])?\{([^}]+)\}/gm)].map(m => ({ title: m[2], level: ['part','chapter','section','subsection','subsubsection'].indexOf(m[1]), line: textFile.content.slice(0, m.index).split('\n').length })) : [];
   const lineCount = textFile ? textFile.content.split('\n').length : 0;
-  const idleEstimate = useMemo(() => estimateCompileTime(workspace.files, resourceTier, true,
-    readCompileHistory(historyKey(workspace.files, resourceTier))), [workspace.files, resourceTier]);
+  const previewTier = useMemo(() => {
+    if (resourceTier !== 'auto') return resourceTier;
+    // Lightweight UI-only heuristic. The authoritative preflight runs on compile.
+    const first = workspace.files.find(f => f.path === workspace.rootFile);
+    const source = typeof first?.content === 'string' ? first.content.slice(0, 2000) : '';
+    return workspace.files.length >= 20 || workspace.files.some(f => /(?:^|\/)Everflow-(?:Exam|Book|Public)\.tex$/i.test(f.path))
+      || /\\(?:documentclass(?:\[[^\]]*\])?\{ctex|usepackage(?:\[[^\]]*\])?\{[^}]*\b(?:tikz|ctex|xeCJK|fontspec)\b)/i.test(source)
+      ? 'recommended' : 'basic';
+  }, [workspace.files, workspace.rootFile, resourceTier]);
+  const idleEstimate = useMemo(() => estimateCompileTime(workspace.files, previewTier, true,
+    readCompileHistory(historyKey(workspace.files, previewTier))), [workspace.files, previewTier]);
   const localReady = ready && !unsaved;
   const changePdfWidth = (w: number) => setPdfWidth(clampPdf(w));
   const statusMessage = state;
@@ -711,10 +720,9 @@ export default function BrowserWorkspace() {
         <select id="browser-bundle" aria-label="TeX Live 资源包" className="browser-aldine__engine"
           disabled={busy} value={resourceTier}
           onChange={(e) => {
-            const next = e.target.value as 'basic' | 'recommended' | 'extra';
-            setResourceTier(next);
-            try { localStorage.setItem('everflow.busytex.resourceTier', next); } catch {}
+            setResourceTier(e.target.value as ResourceChoice);
           }}>
+          <option value="auto">自动（按当前工程）</option>
           <option value="basic">基础（约 90 MB）</option>
           <option value="recommended">推荐（再加 192 MB）</option>
           <option value="extra">扩展（再加约 518 MB）</option>
@@ -939,7 +947,7 @@ export default function BrowserWorkspace() {
                 <p>{coverage.note}</p>
                 {coverage.suggested !== resourceTier && <button className="btn btn--small" type="button" disabled={busy}
                   title="仅改变下次编译的资源档位，不会立刻下载宏包"
-                  onClick={() => { setResourceTier(coverage.suggested); try { localStorage.setItem('everflow.busytex.resourceTier', coverage.suggested); } catch {} }}>
+                  onClick={() => setResourceTier(coverage.suggested)}>
                   设为建议的{coverage.suggested === 'extra' ? '扩展' : coverage.suggested === 'recommended' ? '推荐' : '基础'}资源档位（下次编译生效）
                 </button>}
                 {coverage.matches.filter(item => item.tier !== 'basic' && item.tier !== 'local').length > 0 &&
