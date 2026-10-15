@@ -524,7 +524,10 @@ export default function BrowserWorkspace() {
     setCompileIssues([]);
     try {
       const report = scanLatexDependencies(workspace.files, workspace.rootFile);
-      let effectiveTier = resourceTier;
+      // A failed/offline catalog lookup must never silently downgrade a complex
+      // Everflow/TikZ/CJK project to Basic. The static source scan is our floor.
+      let effectiveTier: 'basic' | 'recommended' | 'extra' =
+        resourceTier === 'basic' && report.recommendedTier === 'recommended' ? 'recommended' : resourceTier;
       try {
         const required = await assessTeXLiveCoverage(report.packages, BUSYTEX_ASSETS, workspace.files.map(f => f.path));
         const ranks = { basic: 0, recommended: 1, extra: 2 };
