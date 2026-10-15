@@ -829,12 +829,18 @@ export default function BrowserWorkspace() {
 
       <div className={'workspace browser-aldine__workspace browser-aldine__workspace--' + viewMode + (resizing ? ' workspace--resizing' : '')}>
         <aside className={'pane sidebar' + (sidebarHidden ? ' sidebar--hidden' : '')} data-testid="sidebar">
-          <div className="sidebar__tabs" role="tablist" aria-label="文件面板">
-            <button role="tab" aria-selected="true" className="sidebar__tab sidebar__tab--active">文件</button>
-            <button role="tab" aria-selected="false" className="sidebar__tab"
-              onClick={() => setShowLog((v) => !v)}>日志</button>
+          <div className="sidebar__tabs texpage-editor__sidebar-tabs" role="tablist" aria-label="文件面板">
+            <button role="tab" aria-selected="true" className="sidebar__tab sidebar__tab--active">文件目录</button>
+            <button role="tab" aria-selected="false" className="sidebar__tab" onClick={() => document.querySelector('.browser-aldine__outline')?.scrollIntoView({block:'nearest'})}>文件大纲</button>
           </div>
           <div className="sidebar__body browser-aldine__tree" data-testid="file-tree">
+            <div className="texpage-editor__explorer-actions" role="toolbar" aria-label="文件目录快捷操作">
+              <span className="texpage-editor__explorer-label">文件目录</span>
+              <button type="button" title="新建文件" aria-label="新建源文件（快捷）" disabled={busy} onClick={createFile}><TexPageIcon name="filePlus" /></button>
+              <button type="button" title="新建文件夹" aria-label="新增文件夹（快捷）" disabled={busy} onClick={createFolder}><TexPageIcon name="folderPlus" /></button>
+              <button type="button" title="上传文件" aria-label="上传资源文件（快捷）" disabled={busy} onClick={() => uploadRef.current?.click()}><TexPageIcon name="upload" /></button>
+              <button type="button" title="搜索文件" aria-label="定位文件搜索框" onClick={() => document.querySelector<HTMLInputElement>('.browser-aldine__file-search input')?.focus()}><TexPageIcon name="search" /></button>
+            </div>
             <div className="browser-aldine__root">
               <span>项目文件</span><small>{workspace.files.length}</small>
             </div>
@@ -872,18 +878,18 @@ export default function BrowserWorkspace() {
             </div>
           </div>
           <section className="browser-aldine__outline" data-testid="file-outline" aria-label="文件大纲">
-            <h3>文件大纲</h3>
+            <h3><TexPageIcon name="list" /> 文件大纲</h3>
             {outline.length ? outline.map((item, i) => <button key={i} className="btn btn--ghost" style={{ paddingLeft: 12 + Math.max(0, item.level - 2) * 12 }} onClick={() => setJump({line: item.line, tick: Date.now()})}>{item.title}</button>) : <p>当前文件没有章节标题</p>}
           </section>
         </aside>
 
         <main className="pane pane--editor browser-aldine__source">
           <div className="pane__header">
-            <span className="statusbar__file" data-testid="active-file">{active}</span>
+            <span className="statusbar__file" data-testid="active-file"><TexPageIcon name="code" />{active}</span>
             <span className="toolbar__spacer" />
             {current && <button className="btn btn--ghost btn--small" onClick={() => saveAs(
               new Blob([typeof current.content === 'string' ? current.content : new Uint8Array(current.content)]),
-              current.path.split('/').pop() || 'main.tex')}>下载文件</button>}
+              current.path.split('/').pop() || 'main.tex')}><TexPageIcon name="download" />下载文件</button>}
             <span className="pdf-status">{lineCount} 行</span>
           </div>
           {textFile && !showProjects
@@ -922,8 +928,8 @@ export default function BrowserWorkspace() {
         <section className="pane pane--preview browser-aldine__preview" style={{ width: pdfWidth, flex: 'none' }}>
           <div className="pane__header browser-aldine__preview-head">
             <div className="browser-aldine__output-tabs" role="tablist" aria-label="编译输出">
-              <button role="tab" aria-selected={!showLog} className="btn btn--small" onClick={() => setShowLog(false)}>PDF</button>
-              <button role="tab" aria-selected={showLog} className="btn btn--small" onClick={() => {setShowLog(true); setShowPreflight(false);}}>日志 {compileIssues.length ? compileIssues.length : ''}</button>
+              <button role="tab" aria-selected={!showLog} className="btn btn--small" onClick={() => setShowLog(false)}><TexPageIcon name="document" />PDF</button>
+              <button role="tab" aria-selected={showLog} className="btn btn--small" onClick={() => {setShowLog(true); setShowPreflight(false);}}><TexPageIcon name="list" />日志 {compileIssues.length ? compileIssues.length : ''}</button>
             </div>
             <span className="pdf-status">
               {compileStatus === 'compiling' ? '编译中' : compileStatus === 'ok' ? '已编译' : compileStatus === 'error' ? '编译失败' : '尚未编译'}
@@ -943,8 +949,8 @@ export default function BrowserWorkspace() {
               <button className="btn btn--small" aria-label="放大 PDF" onClick={() => setZoom((v) => Math.min(3, v + .1))}>＋</button>
             </div>}
             {previewUrl && <a className="btn btn--small" href={previewUrl}
-              download={(workspace.name || 'everflow').replace(/[\\/:*?"<>|]/g, '-') + '.pdf'}>下载 PDF</a>}
-            <button className="btn btn--ghost btn--small" onClick={() => setShowLog((v) => !v)}>日志</button>
+              download={(workspace.name || 'everflow').replace(/[\\/:*?"<>|]/g, '-') + '.pdf'}><TexPageIcon name="download" />下载 PDF</a>}
+            <button className="btn btn--ghost btn--small" title="切换编译日志" aria-label="切换编译日志" onClick={() => setShowLog((v) => !v)}><TexPageIcon name="list" /></button>
           </div>
           <div className="browser-aldine__pdf-content" hidden={showLog}>
           {!previewUrl ? <div className="browser-ws__empty" data-testid="pdf-empty"><strong>{compileStatus === 'compiling' ? '正在编译…' : 'PDF 预览'}</strong><span>点击编译后在此查看 PDF</span></div>
@@ -977,6 +983,13 @@ export default function BrowserWorkspace() {
       </section>}
         </section>
       </div>
+      <footer className="texpage-editor__statusline" aria-label="编辑器状态">
+        <span><TexPageIcon name="file" />{active}</span>
+        <span className="texpage-editor__statusline-spacer" />
+        <span>{lineCount} 行</span>
+        <span>{workspace.engine.toUpperCase()}</span>
+        <span>{localReady ? '本地已保存' : '正在保存…'}</span>
+      </footer>
       {showPreflight && preflight && <section className="browser-aldine__preflight" data-testid="preflight-panel">
         <div className="pane__header">
           <strong>LaTeX 模板依赖检查（静态分析）</strong>
