@@ -9,7 +9,7 @@ export type TexIconName =
   | 'help' | 'info' | 'clock' | 'check' | 'refresh' | 'document'
   | 'code' | 'file' | 'copy' | 'external' | 'panelLeft' | 'panelRight'
   | 'play' | 'book' | 'history' | 'sun' | 'moon' | 'maximize' | 'layout'
-  | 'eye' | 'edit' | 'x' | 'menu';
+  | 'eye' | 'edit' | 'x' | 'menu' | 'undo' | 'redo' | 'hash' | 'sigma';
 
 const drawings: Record<TexIconName, ReactNode> = {
   home: <><path d="m2 7 6-5 6 5v7H2Z" /><path d="M6 14V9h4v5" /></>,
@@ -53,7 +53,11 @@ const drawings: Record<TexIconName, ReactNode> = {
   eye: <><path d="M1.5 8s2.3-4.5 6.5-4.5 6.5 4.5 6.5 4.5-2.3 4.5-6.5 4.5S1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2"/></>,
   edit: <><path d="m3 11.5 7.5-7.5 2.5 2.5-7.5 7.5-3.4.7Z"/><path d="m9.5 5 2.5 2.5"/></>,
   x: <path d="M3 3l10 10M13 3 3 13"/>,
-  menu: <path d="M2 4h12M2 8h12M2 12h12"/>
+  menu: <path d="M2 4h12M2 8h12M2 12h12"/>,
+  undo: <><path d="M5 5 2 8l3 3"/><path d="M2 8h8a3.5 3.5 0 0 1 0 7"/></>,
+  redo: <><path d="m11 5 3 3-3 3"/><path d="M14 8H6a3.5 3.5 0 0 0 0 7"/></>,
+  hash: <><path d="M6 1.5 4 14.5M12 1.5 10 14.5M2 5.5h12M1.5 11h12"/></>,
+  sigma: <path d="M12.5 2H3.5l5 6-5 6h9"/>
 };
 export function TexPageIcon({ name, ...props }: { name: TexIconName } & SVGProps<SVGSVGElement>) {
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
