@@ -8,11 +8,6 @@ const BASIC_PACKAGES = new Set([
   'amsmath', 'amssymb', 'amsfonts', 'graphicx', 'graphics',
   'array', 'calc', 'ifthen', 'fontenc', 'inputenc', 'textcomp',
 ]);
-const RECOMMENDED_PACKAGES = new Set([
-  'tikz', 'pgf', 'ctex', 'xecjk', 'fontspec', 'fontawesome5',
-  'newtxmath', 'qrcode',
-]);
-
 export function resourceTierForProject(choice: ResourceChoice, report: PreflightResult): ResourceTier {
   const minimum: ResourceTier = report.recommendedTier;
   if (choice === 'auto') return minimum;
@@ -24,7 +19,9 @@ export function needsPackageCatalog(report: PreflightResult, localPaths: string[
   const local = new Set(localPaths.filter(p => /\.sty$/i.test(p)).map(p => p.split('/').pop()!.slice(0, -4).toLowerCase()));
   return report.packages.some(p => {
     const name = p.toLowerCase();
-    return !BASIC_PACKAGES.has(name) && !RECOMMENDED_PACKAGES.has(name) && !local.has(name);
+    // Complex packages must be resolved against the REAL TeX Live inventories:
+    // several common-sounding TikZ/PGF assets live in Extra, not Recommended.
+    return !BASIC_PACKAGES.has(name) && !local.has(name);
   });
 }
 
