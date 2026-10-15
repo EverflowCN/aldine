@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['61-browser-local-files.spec.ts', '62-browser-project-history.spec.ts'],
+  testMatch: ['61-browser-local-files.spec.ts', '62-browser-project-history.spec.ts', '63-texpage-reference-layout.spec.ts'],
   workers: 1,
   use: { baseURL: 'http://127.0.0.1:5173', headless: true, viewport: { width: 1440, height: 900 } },
   webServer: {
