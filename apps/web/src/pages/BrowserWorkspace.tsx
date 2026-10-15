@@ -89,13 +89,15 @@ async function restoreWorkspace(): Promise<Workspace | null> {
     if (value?.projectId) return await loadProject(value.projectId);
     if (!value || !Array.isArray(value.files)) return null;
     if (value.name === 'Everflow 本地 LaTeX 工程' && value.files.length === 1 && value.files[0].path === 'main.tex' && value.files[0].content === TEST_SOURCE && !value.folders?.length) return value as Workspace;
-    const migrated = await createProject(value as Workspace);
-    await persistWorkspace(migrated);
-    return migrated;
+    try {
+      const migrated = await createProject(value as Workspace);
+      await persistWorkspace(migrated, false);
+      return migrated;
+    } catch { return value as Workspace; }
   } finally { db.close(); }
 }
-async function persistWorkspace(w: Workspace): Promise<void> {
-  if (w.projectId && !await saveProject(w)) return;
+async function persistWorkspace(w: Workspace, saveFiles = true): Promise<void> {
+  if (saveFiles && w.projectId && !await saveProject(w)) return;
   const db = await dbOpen();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -173,6 +175,7 @@ export default function BrowserWorkspace() {
   const runnerRef = useRef<BusyRunner | null>(null);
   const engineRef = useRef<Record<Engine, BusyCompiler> | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSaved = useRef<Workspace | null>(null);
   const latest = useRef(workspace);
   latest.current = workspace;
   const previewRef = useRef<string | null>(null);
@@ -181,6 +184,7 @@ export default function BrowserWorkspace() {
     let cancelled = false;
     readWorkspace().then((stored) => {
       if (cancelled) return;
+      lastSaved.current = stored || latest.current;
       if (stored) {
         setWorkspace(stored);
         setActive(stored.rootFile);
@@ -196,12 +200,13 @@ export default function BrowserWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || workspace === lastSaved.current) return;
     setUnsaved(true);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      persistWorkspace(latest.current)
-        .then(() => setUnsaved(false))
+      const saving = latest.current;
+      persistWorkspace(saving)
+        .then(() => { lastSaved.current = saving; if (latest.current === saving) setUnsaved(false); })
         .catch((err: unknown) => { setUnsaved(true); setState('自动保存失败：' + String(err)); });
     }, 500);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
@@ -223,6 +228,7 @@ export default function BrowserWorkspace() {
   }, []);
 
   function resetProjectView(next: Workspace): void {
+    lastSaved.current = next; setUnsaved(false);
     runnerRef.current?.terminate(); runnerRef.current = null; engineRef.current = null;
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     previewRef.current = null; setPreviewUrl(null); setCompileStatus('idle');
@@ -231,7 +237,10 @@ export default function BrowserWorkspace() {
   }
   async function flushProject(): Promise<void> {
     if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
-    await persistWorkspace(latest.current);
+    while (latest.current !== lastSaved.current) {
+      const saving = latest.current; await persistWorkspace(saving); lastSaved.current = saving;
+    }
+    setUnsaved(false);
   }
   async function refreshProjects(): Promise<void> { setProjectRecords(await listProjects()); }
   async function showProjectList(): Promise<void> {
@@ -250,7 +259,7 @@ export default function BrowserWorkspace() {
     await projectAction(async () => {
       await flushProject(); const next = await loadProject(id);
       if (!next) throw Error('工程已删除或位于回收站');
-      resetProjectView(next); await persistWorkspace(next); setShowProjects(false);
+      resetProjectView(next); await persistWorkspace(next, false); setShowProjects(false);
       setState('已打开工程：' + next.name);
     });
   }
@@ -258,14 +267,14 @@ export default function BrowserWorkspace() {
     const name = prompt('新工程名称', '未命名工程'); if (!name?.trim()) return;
     await projectAction(async () => {
       await flushProject(); const next = await createProject({ ...fresh(), name: name.trim() });
-      resetProjectView(next); await persistWorkspace(next); setShowProjects(false); setState('新工程已创建。');
+      resetProjectView(next); await persistWorkspace(next, false); setShowProjects(false); setState('新工程已创建。');
     });
   }
   async function trashProject(id: string): Promise<void> {
     await projectAction(async () => {
       if (id === workspace.projectId) await flushProject();
       await setProjectStatus(id, 'trash');
-      if (id === workspace.projectId) { const next = fresh(); resetProjectView(next); await persistWorkspace(next); }
+      if (id === workspace.projectId) { const next = fresh(); resetProjectView(next); await persistWorkspace(next, false); }
       setState('工程已移入回收站，可恢复或彻底删除缓存。');
     });
   }
@@ -345,7 +354,7 @@ export default function BrowserWorkspace() {
       const root = chooseRoot(files);
       await flushProject();
       const next = await createProject({ name: input.name.replace(/\.zip$/i, '').slice(0, 100), engine: 'xelatex', rootFile: root.path, files, folders }, input);
-      await persistWorkspace(next);
+      await persistWorkspace(next, false);
       resetProjectView(next); setShowProjects(false);
       setState('ZIP 已导入，共 ' + files.length + ' 个文件。已自动执行模板依赖检查。');
       auditWorkspaceFiles(files, root.path, true);
