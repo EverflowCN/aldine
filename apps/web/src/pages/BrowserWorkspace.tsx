@@ -4,6 +4,7 @@ import { BASE_PATH } from '../basePath';
 const OfflineCodePane = lazy(() => import('../components/OfflineCodePane'));
 const PdfPane = lazy(() => import('../components/PdfPane'));
 import { IconChevronLeft } from '../components/Icons';
+import { TexPageIcon } from '../components/TexPageIcon';
 import { toggleTheme } from '../theme';
 import { scanLatexDependencies } from '../util/latex-preflight';
 import type { PreflightResult } from '../util/latex-preflight';
@@ -168,6 +169,7 @@ export default function BrowserWorkspace() {
   const [coverage, setCoverage] = useState<TeXLiveCoverage | null>(null);
   const [coverageState, setCoverageState] = useState('尚未查询本站 TeX Live 资源目录。');
   const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [viewMode, setViewMode] = useState<'split' | 'editor' | 'pdf'>('split');
   const [jump, setJump] = useState<{ line: number; tick: number }>();
   const [zoom, setZoom] = useState(1);
   // PDF.js can omit subset-embedded Chinese CID glyphs (e.g. FandolSong).
@@ -753,9 +755,21 @@ export default function BrowserWorkspace() {
       <div className="browser-aldine__editing" hidden={showProjects}>
       <header className="toolbar browser-aldine__toolbar">
         <button className="btn btn--ghost" disabled={busy || !ready} onClick={() => void showProjectList()} title="返回工程列表" aria-label="返回工程列表"><IconChevronLeft /></button>
-        <button className="btn" type="button" data-testid="open-projects" disabled={!ready || busy} onClick={() => void showProjectList()}>我的工程</button>
+        <button className="btn" type="button" data-testid="open-projects" disabled={!ready || busy} onClick={() => void showProjectList()}><TexPageIcon name="home" /> 我的工程</button>
         <input className="toolbar__name browser-aldine__project" value={workspace.name}
           aria-label="项目名称" onChange={(e) => update({ name: e.target.value.slice(0, 100) })} />
+        <div className="toolbar__group texpage-editor__compile">
+          {compileStatus !== 'compiling' && <span className="browser-aldine__idle-eta"
+            title="这是 XeLaTeX 排版的估计时间，不含打开页面后初始化 WebAssembly 引擎的时间；缓存资源仍需重新初始化。"
+            data-testid="precompile-eta">
+            排版预估 {formatCompileTime(idleEstimate.lowSeconds)}～{formatCompileTime(idleEstimate.highSeconds)}
+          </span>}
+          <button className="btn btn--primary" onClick={() => void compile()} disabled={!ready || busy}
+            aria-busy={busy} data-testid="browser-compile" title="浏览器 XeLaTeX 编译（Ctrl/⌘ + S）">
+            {busy ? <span className="spinner" /> : <TexPageIcon name="play" />}
+            {busy ? '编译中 · ' + formatCompileTime(elapsedSeconds) : '编译'}
+          </button>
+        </div>
         <span className="browser-aldine__branch" title="工程保存在当前浏览器，不通过服务器同步">本地项目</span>
         <span className="toolbar__spacer" />
         <label className="browser-aldine__tool-label" htmlFor="browser-engine">编译器</label>
@@ -777,24 +791,22 @@ export default function BrowserWorkspace() {
           <option value="extra">扩展（再加约 518 MB）</option>
         </select>
         <button className="btn btn--ghost browser-aldine__minor" onClick={() => setSidebarHidden((v) => !v)}>
-          {sidebarHidden ? '显示文件' : '隐藏文件'}
+          <TexPageIcon name="panelLeft" />{sidebarHidden ? '显示文件' : '隐藏文件'}
         </button>
-        <button className="btn btn--ghost browser-aldine__minor" title="切换 Aldine 明暗主题" onClick={() => toggleTheme()}>主题</button>
-        <button className="btn browser-aldine__minor" disabled={busy} onClick={() => zipRef.current?.click()}>导入 ZIP</button>
-        <button className="btn browser-aldine__minor" disabled={busy} onClick={() => void exportZip()}>导出 ZIP</button>
-        <button className="btn browser-aldine__minor" type="button" data-testid="preflight-open" onClick={auditWorkspace}>检查模板依赖</button>
-        <div className="toolbar__group">
-          {compileStatus !== 'compiling' && <span className="browser-aldine__idle-eta"
-            title="这是 XeLaTeX 排版的估计时间，不含打开页面后初始化 WebAssembly 引擎的时间；缓存资源仍需重新初始化。"
-            data-testid="precompile-eta">
-            排版预估 {formatCompileTime(idleEstimate.lowSeconds)}～{formatCompileTime(idleEstimate.highSeconds)}
-          </span>}
-          <button className="btn btn--primary" onClick={() => void compile()} disabled={!ready || busy}
-            aria-busy={busy} data-testid="browser-compile" title="浏览器 XeLaTeX 编译（Ctrl/⌘ + S）">
-            {busy && <span className="spinner" />}
-            {busy ? '编译中 · ' + formatCompileTime(elapsedSeconds) : '编译'}
-          </button>
-        </div>
+        <button className="btn btn--ghost browser-aldine__minor" title="切换 Aldine 明暗主题" onClick={() => toggleTheme()}><TexPageIcon name="sun" />主题</button>
+        <button className="btn browser-aldine__minor" disabled={busy} onClick={() => zipRef.current?.click()}><TexPageIcon name="upload" />导入 ZIP</button>
+        <button className="btn browser-aldine__minor" disabled={busy} onClick={() => void exportZip()}><TexPageIcon name="download" />导出 ZIP</button>
+        <button className="btn browser-aldine__minor" type="button" data-testid="preflight-open" onClick={auditWorkspace}><TexPageIcon name="check" />检查模板依赖</button>
+        <details className="texpage-editor__view-menu">
+          <summary title="选择编辑界面排布" aria-label="选择编辑界面排布"><TexPageIcon name="layout" /><span>视图</span><TexPageIcon name="chevronDown" /></summary>
+          <div className="texpage-editor__view-options">
+            <button type="button" aria-pressed={viewMode === 'split'} onClick={() => setViewMode('split')}><TexPageIcon name="layout" />右侧显示 PDF</button>
+            <button type="button" aria-pressed={viewMode === 'editor'} onClick={() => setViewMode('editor')}><TexPageIcon name="code" />仅显示编辑器</button>
+            <button type="button" aria-pressed={viewMode === 'pdf'} onClick={() => setViewMode('pdf')}><TexPageIcon name="document" />仅显示 PDF</button>
+            <button type="button" onClick={() => setSidebarHidden(v=>!v)}><TexPageIcon name="panelLeft" />{sidebarHidden?'显示文件目录':'隐藏文件目录'}</button>
+          </div>
+        </details>
+
       </header>
 
       {compileStatus === 'compiling' && compileEstimate && <div className="browser-aldine__compile-progress" role="timer" aria-label="本地编译预计时间" data-testid="compile-eta">
@@ -815,7 +827,7 @@ export default function BrowserWorkspace() {
         <span className="browser-aldine__mode">WebAssembly · 离线编译</span>
       </div>
 
-      <div className={'workspace browser-aldine__workspace' + (resizing ? ' workspace--resizing' : '')}>
+      <div className={'workspace browser-aldine__workspace browser-aldine__workspace--' + viewMode + (resizing ? ' workspace--resizing' : '')}>
         <aside className={'pane sidebar' + (sidebarHidden ? ' sidebar--hidden' : '')} data-testid="sidebar">
           <div className="sidebar__tabs" role="tablist" aria-label="文件面板">
             <button role="tab" aria-selected="true" className="sidebar__tab sidebar__tab--active">文件</button>
