@@ -642,7 +642,10 @@ export default function BrowserWorkspace() {
         input: main.content,
         additionalFiles: others,
         dataPackagesJs: bundles.length ? bundles : undefined,
-        rerun: needsSecondPass(workspace.files),
+        // BusyTeX may need its extra package resolution pass for TikZ/CJK
+        // bundles even when the TeX source has no cross-references.
+        // Basic article/amsmath stays genuinely single-pass for speed.
+        rerun: needsSecondPass(workspace.files) || effectiveTier !== 'basic',
         verbose: 'info',
         remoteEndpoint: allowPackages && !standardLocalOnly ? PACKAGE_SERVICE : undefined
       };
