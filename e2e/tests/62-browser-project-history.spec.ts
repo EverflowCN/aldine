@@ -105,3 +105,32 @@ test('failed PDF lazy loading preserves the editor and provides native preview',
   await expect(page.locator('.cm-content')).toBeVisible();
   await expect(page.getByTestId('open-projects')).toBeEnabled();
 });
+
+test('local compile shows elapsed ETA and recovers exit-code-zero with no PDF', async ({ page }) => {
+  const packages = Array.from({length:12},(_,i)=>'\\\\ProvidesPackage{fixture'+i+'}').join('\\n');
+  await page.route(/texlive-.*\\.txt$/, r => r.fulfill({contentType:'text/plain',body:packages}));
+  await page.route(/busytex-cache\\.mjs(?:\\?.*)?$/, r => r.fulfill({contentType:'text/javascript',body:
+    'export async function prepareBusyTeXCache(){return {coreCached:true}};export async function getBusyTeXCacheStatus(){return {coreCached:true}}'}));
+  await page.route(/busytex-lib\\.mjs(?:\\?.*)?$/, r => r.fulfill({contentType:'text/javascript',body:`
+    export class BusyTexRunner {async initialize(){}terminate(){}}
+    class Engine {
+      async compile(options) {
+        window.__compileAttempts = [...(window.__compileAttempts || []), options.rerun];
+        await new Promise(resolve=>setTimeout(resolve, options.rerun ? 1400 : 150));
+        if (options.rerun) return {success:true, exitCode:0, logs:[]};
+        return {success:true, exitCode:0, pdf:new TextEncoder().encode('%PDF-1.4\\\\nrecovered'), logs:[]};
+      }
+    }
+    export {Engine as XeLatex, Engine as PdfLatex, Engine as LuaLatex};
+  `}));
+  await page.goto('/?local=1');
+  await page.getByTestId('browser-compile').click();
+  const eta = page.getByTestId('compile-eta');
+  await expect(eta).toBeVisible();
+  await expect(eta).toContainText('预计剩余');
+  await expect(eta).toContainText('已用');
+  await expect(page.locator('.browser-aldine__status-text')).toContainText('编译成功', {timeout: 15000});
+  expect(await page.evaluate(() => (window as any).__compileAttempts)).toEqual([true,false]);
+  await expect(eta).toHaveCount(0);
+  await expect(page.locator('.browser-aldine__status-text')).toContainText('单轮编译恢复 PDF');
+});
