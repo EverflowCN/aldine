@@ -30,7 +30,7 @@ test('CTeX, TikZ and custom style still require Recommended and complex packages
   const report = scanLatexDependencies(files, 'main.tex');
   expect(report.recommendedTier).toBe('recommended');
   expect(resourceTierForProject('auto', report)).toBe('recommended');
-  expect(needsPackageCatalog(report, files.map(f => f.path))).toBe(false);
+  expect(needsPackageCatalog(report, files.map(f => f.path))).toBe(true);
   expect(needsSecondPass(files)).toBe(false);
 });
 
