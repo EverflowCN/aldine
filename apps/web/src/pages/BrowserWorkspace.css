@@ -520,3 +520,18 @@
   .browser-aldine__workspace--pdf .browser-aldine__preview{min-height:70vh}
   .texpage-editor__statusline{padding:0 6px;gap:8px;font-size:10px}
 }
+
+/* Match the reference file explorer: fixed icon row, scrollable file list, and
+ * infrequently used actions tucked under one disclosure. */
+.browser-aldine__workspace .texpage-editor__explorer-actions{flex:none;background:#272e36;justify-content:flex-end}
+.browser-aldine__workspace .texpage-editor__explorer-label{display:none}
+.browser-aldine__workspace .texpage-editor__explorer-actions button:last-child{margin-left:auto}
+.texpage-editor__more-files{border-top:1px solid #394452;font-size:11px;color:#b1bfce}
+.texpage-editor__more-files summary{display:flex;align-items:center;gap:6px;padding:8px 12px;list-style:none;cursor:pointer;
+  color:#aebccd}
+.texpage-editor__more-files summary::-webkit-details-marker{display:none}
+.texpage-editor__more-files summary:hover{background:#374251;color:#fff}
+.texpage-editor__more-files summary svg:last-child{margin-left:auto;width:12px}
+.texpage-editor__more-files[open] summary svg:last-child{transform:rotate(180deg)}
+.browser-aldine__workspace .texpage-editor__more-files .browser-aldine__actions{display:flex;flex-wrap:wrap;gap:3px;padding:6px 8px 10px}
+.browser-aldine__workspace .texpage-editor__more-files .browser-aldine__actions .btn{height:25px;min-height:25px}
