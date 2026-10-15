@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { BASE_PATH } from '../basePath';
 const OfflineCodePane = lazy(() => import('../components/OfflineCodePane'));
@@ -671,6 +671,8 @@ export default function BrowserWorkspace() {
   const textFile = current && isText(current) ? current : null;
   const outline = textFile ? [...textFile.content.matchAll(/^[ \t]*\\(part|chapter|section|subsection|subsubsection)\*?(?:\[[^\]]*\])?\{([^}]+)\}/gm)].map(m => ({ title: m[2], level: ['part','chapter','section','subsection','subsubsection'].indexOf(m[1]), line: textFile.content.slice(0, m.index).split('\n').length })) : [];
   const lineCount = textFile ? textFile.content.split('\n').length : 0;
+  const idleEstimate = useMemo(() => estimateCompileTime(workspace.files, resourceTier, true,
+    readCompileHistory(historyKey(workspace.files, resourceTier))), [workspace.files, resourceTier]);
   const localReady = ready && !unsaved;
   const changePdfWidth = (w: number) => setPdfWidth(clampPdf(w));
   const statusMessage = state;
@@ -719,6 +721,11 @@ export default function BrowserWorkspace() {
         <button className="btn browser-aldine__minor" disabled={busy} onClick={() => void exportZip()}>导出 ZIP</button>
         <button className="btn browser-aldine__minor" type="button" data-testid="preflight-open" onClick={auditWorkspace}>检查模板依赖</button>
         <div className="toolbar__group">
+          {compileStatus !== 'compiling' && <span className="browser-aldine__idle-eta"
+            title="仅估计已缓存资源后的编译时间。首次使用还需要下载编译器与宏包，实际耗时取决于设备。"
+            data-testid="precompile-eta">
+            预估 {formatCompileTime(idleEstimate.lowSeconds)}～{formatCompileTime(idleEstimate.highSeconds)}
+          </span>}
           <button className="btn btn--primary" onClick={() => void compile()} disabled={!ready || busy}
             aria-busy={busy} data-testid="browser-compile" title="浏览器 XeLaTeX 编译（Ctrl/⌘ + S）">
             {busy && <span className="spinner" />}
