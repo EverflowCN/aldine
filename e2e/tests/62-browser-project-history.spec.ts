@@ -128,7 +128,13 @@ test('local compile shows elapsed ETA and recovers exit-code-zero with no PDF', 
   const eta = page.getByTestId('compile-eta');
   await expect(eta).toBeVisible();
   await expect(eta).toContainText(/已用.*预计剩余/, {timeout: 3000});
-  await expect(page.locator('.browser-aldine__status-text')).toContainText('编译成功', {timeout: 15000});
+  await page.waitForFunction(() => /编译成功|编译失败/.test(document.querySelector('.browser-aldine__status-text')?.textContent || ''), null, {timeout: 15000});
+  const compileResult = await page.locator('.browser-aldine__status-text').textContent();
+  if (!compileResult?.includes('编译成功')) {
+    console.log('Synthetic compile failure:', (await page.getByTestId('browser-compile-log').textContent()).slice(0, 1800));
+    console.log('Synthetic compile attempts:', await page.evaluate(() => (window as any).__compileAttempts));
+  }
+  expect(compileResult).toContain('编译成功');
   expect(await page.evaluate(() => (window as any).__compileAttempts)).toEqual([true,false]);
   await expect(eta).toHaveCount(0);
   await expect(page.locator('.browser-aldine__status-text')).toContainText('单轮编译恢复 PDF');
