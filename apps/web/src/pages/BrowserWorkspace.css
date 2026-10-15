@@ -220,3 +220,29 @@
 @media(max-width:760px){.browser-projects nav{width:auto;padding:10px}.browser-projects section{padding:10px}.browser-projects header{padding:14px 16px}.browser-projects-tools{flex-wrap:wrap;padding:4px 0 14px}.browser-projects-tools input{flex:1}.browser-aldine__preflight{width:100%}.browser-aldine__workspace .sidebar{width:100%}.browser-aldine__outline{max-height:140px;min-height:70px}.browser-aldine__source{min-height:45vh}.browser-aldine__preview{min-height:45vh}}
 
 .browser-aldine__pdf-content .browser-ws__empty{color:#eef2f7}
+
+/* Time estimate is a range, not a deadline. No network service is involved. */
+.browser-aldine__compile-progress {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  min-height: 30px; padding: 6px 12px;
+  background: var(--bg-inset); border-bottom: 1px solid var(--hairline);
+  font-size: 12px; color: var(--text-2);
+}
+.browser-aldine__compile-progress strong { color: var(--text); font-weight: 600; }
+.browser-aldine__phase {
+  display: inline-flex; align-items: center; gap: 7px;
+  color: var(--accent); font-weight: 600;
+}
+.browser-aldine__phase::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: currentColor; animation: everflow-compile-pulse 1.4s ease-in-out infinite;
+}
+@keyframes everflow-compile-pulse { 50% { opacity: .3; } }
+.browser-aldine__estimate-note { margin-left: auto; opacity: .8; }
+@media (max-width: 800px) {
+  .browser-aldine__compile-progress { gap: 6px 12px; padding: 8px; }
+  .browser-aldine__estimate-note { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .browser-aldine__phase::before { animation: none; }
+}
