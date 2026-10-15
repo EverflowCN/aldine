@@ -20,6 +20,7 @@ All notable changes to Aldine are documented here. The format follows
   an Undo button.
 
 ### Changed
+- Fit native PDFs to preview width with thumbnails initially closed, and isolate lazy editor/PDF loading errors so a stale deployment chunk cannot blank the workspace.
 - Browser entry opens a full project dashboard; the editing workspace follows a compact file/outline, source, and PDF/log layout with a light source canvas.
 - Scan included project dependencies before compile and preload selected TeX Live bundles together, recreating the worker when its resource tier changes.
 - Classify PGF internal `.code.tex` dependencies correctly and offer a clean worker retry without deleting project files.

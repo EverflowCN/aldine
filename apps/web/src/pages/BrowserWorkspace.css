@@ -218,3 +218,5 @@
 .browser-aldine__preflight{position:absolute;right:0;bottom:0;width:min(650px,calc(100vw - 250px));z-index:20;max-height:55vh;box-shadow:0 -6px 24px #0003}
 @media(max-width:1050px){.browser-aldine__toolbar{gap:4px}.browser-aldine__tool-label,.browser-aldine__branch{display:none}.browser-aldine__project{flex-basis:130px;width:130px}.browser-aldine__workspace .sidebar{width:215px}}
 @media(max-width:760px){.browser-projects nav{width:auto;padding:10px}.browser-projects section{padding:10px}.browser-projects header{padding:14px 16px}.browser-projects-tools{flex-wrap:wrap;padding:4px 0 14px}.browser-projects-tools input{flex:1}.browser-aldine__preflight{width:100%}.browser-aldine__workspace .sidebar{width:100%}.browser-aldine__outline{max-height:140px;min-height:70px}.browser-aldine__source{min-height:45vh}.browser-aldine__preview{min-height:45vh}}
+
+.browser-aldine__pdf-content .browser-ws__empty{color:#eef2f7}

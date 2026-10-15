@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { BASE_PATH } from '../basePath';
 const OfflineCodePane = lazy(() => import('../components/OfflineCodePane'));
 const PdfPane = lazy(() => import('../components/PdfPane'));
@@ -128,6 +129,15 @@ const BUSYTEX_ASSETS = BASE_PATH + '/browser-test/core/busytex';
 const BUSYTEX_MODULE = BASE_PATH + '/browser-test/busytex-lib.mjs';
 const PACKAGE_SERVICE = 'https://texlive2026.texlyre.org';
 
+class PaneBoundary extends Component<{ children: ReactNode; fallback: ReactNode; resetKey: string }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidUpdate(previous: Readonly<{ resetKey: string }>) {
+    if (this.state.failed && previous.resetKey !== this.props.resetKey) this.setState({ failed: false });
+  }
+  render() { return this.state.failed ? this.props.fallback : this.props.children; }
+}
+
 export default function BrowserWorkspace() {
   const [workspace, setWorkspace] = useState<Workspace>(fresh);
   const [active, setActive] = useState('main.tex');
@@ -235,7 +245,7 @@ export default function BrowserWorkspace() {
     runnerRef.current?.terminate(); runnerRef.current = null; engineRef.current = null;
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     previewRef.current = null; setPreviewUrl(null); setCompileStatus('idle');
-    setErrorLog(''); setCompileIssues([]); setPreflight(null); setShowPreflight(false);
+    setErrorLog(''); setCompileIssues([]); setPreflight(null); setShowPreflight(false); setShowLog(false); setJump(undefined);
     setWorkspace(next); setActive(next.rootFile); setSelectedFolder('');
   }
   async function flushProject(): Promise<void> {
@@ -617,7 +627,7 @@ export default function BrowserWorkspace() {
 
   const current = workspace.files.find((f) => f.path === active);
   const textFile = current && isText(current) ? current : null;
-  const outline = textFile ? [...textFile.content.matchAll(/^\s*\\(part|chapter|section|subsection|subsubsection)\*?(?:\[[^\]]*\])?\{([^}]+)\}/gm)].map(m => ({ title: m[2], level: ['part','chapter','section','subsection','subsubsection'].indexOf(m[1]), line: textFile.content.slice(0, m.index).split('\n').length })) : [];
+  const outline = textFile ? [...textFile.content.matchAll(/^[ \t]*\\(part|chapter|section|subsection|subsubsection)\*?(?:\[[^\]]*\])?\{([^}]+)\}/gm)].map(m => ({ title: m[2], level: ['part','chapter','section','subsection','subsubsection'].indexOf(m[1]), line: textFile.content.slice(0, m.index).split('\n').length })) : [];
   const lineCount = textFile ? textFile.content.split('\n').length : 0;
   const localReady = ready && !unsaved;
   const changePdfWidth = (w: number) => setPdfWidth(clampPdf(w));
@@ -630,7 +640,7 @@ export default function BrowserWorkspace() {
     <div className={"editor-shell browser-aldine" + (showProjects ? " browser-aldine--home" : "")} data-testid="editor-shell">
       <div className="browser-aldine__editing" hidden={showProjects}>
       <header className="toolbar browser-aldine__toolbar">
-        <button className="btn btn--ghost" onClick={() => void showProjectList()} title="返回工程列表" aria-label="返回工程列表"><IconChevronLeft /></button>
+        <button className="btn btn--ghost" disabled={busy || !ready} onClick={() => void showProjectList()} title="返回工程列表" aria-label="返回工程列表"><IconChevronLeft /></button>
         <button className="btn" type="button" data-testid="open-projects" disabled={!ready || busy} onClick={() => void showProjectList()}>我的工程</button>
         <input className="toolbar__name browser-aldine__project" value={workspace.name}
           aria-label="项目名称" onChange={(e) => update({ name: e.target.value.slice(0, 100) })} />
@@ -739,8 +749,8 @@ export default function BrowserWorkspace() {
             <span className="pdf-status">{lineCount} 行</span>
           </div>
           {textFile && !showProjects
-            ? <Suspense fallback={<div className="browser-editor-loading">正在准备编辑器…</div>}><OfflineCodePane key={active} path={active} value={textFile.content}
-                jump={jump} onChange={(value) => updateFile(active, value)} onCompile={() => void compile()} /></Suspense>
+            ? <PaneBoundary resetKey={active} fallback={<div className="browser-editor-loading" role="alert"><p>编辑器资源已更新，请重新打开页面。</p><button className="btn" onClick={() => void flushProject().then(() => location.reload()).catch(error => setState('保存失败：' + String(error)))}>保存并重新加载</button></div>}><Suspense fallback={<div className="browser-editor-loading">正在准备编辑器…</div>}><OfflineCodePane key={active} path={active} value={textFile.content}
+                jump={jump} onChange={(value) => updateFile(active, value)} onCompile={() => void compile()} /></Suspense></PaneBoundary>
             : <div className="pdf-empty"><p>{current ? '二进制资源不能直接编辑，可在编译时引用。' : '选择文件开始编辑。'}</p></div>}
         </main>
 
@@ -801,9 +811,9 @@ export default function BrowserWorkspace() {
           <div className="browser-aldine__pdf-content" hidden={showLog}>
           {!previewUrl ? <div className="browser-ws__empty" data-testid="pdf-empty"><strong>{compileStatus === 'compiling' ? '正在编译…' : 'PDF 预览'}</strong><span>点击编译后在此查看 PDF</span></div>
             : pdfRenderer === 'native' ? <iframe key={previewUrl} className="browser-aldine__native-pdf"
-                title="浏览器原生 PDF 预览（兼容中文嵌入字体）" data-testid="pdf-native" src={previewUrl} />
-            : <Suspense fallback={<div className="browser-editor-loading">正在准备 PDF 预览…</div>}><PdfPane pdfUrl={previewUrl} branch={workspace.projectId || 'local'} status={compileStatus} zoom={zoom}
-                locale="zh" stale={compileStatus === 'error'} ready={ready} hasTex={true} onFirstOpen={() => {}} /></Suspense>}
+                title="浏览器原生 PDF 预览（兼容中文嵌入字体）" data-testid="pdf-native" src={previewUrl + '#view=FitH&navpanes=0'} />
+            : <PaneBoundary resetKey={previewUrl} fallback={<iframe className="browser-aldine__native-pdf" data-testid="pdf-fallback" title="备用浏览器 PDF 预览" src={previewUrl + '#view=FitH&navpanes=0'} />}><Suspense fallback={<div className="browser-editor-loading">正在准备 PDF 预览…</div>}><PdfPane pdfUrl={previewUrl} branch={workspace.projectId || 'local'} status={compileStatus} zoom={zoom}
+                locale="zh" stale={compileStatus === 'error'} ready={ready} hasTex={true} onFirstOpen={() => {}} /></Suspense></PaneBoundary>}
           {pdfRenderer === 'native' && previewUrl && (
             <div className="browser-aldine__pdfhint" role="note">
               中文文字由浏览器 PDF 内核渲染。如果当前浏览器仍不显示，请点击「下载 PDF」使用系统阅读器。

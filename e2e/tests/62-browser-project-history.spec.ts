@@ -90,3 +90,18 @@ test('dashboard entry and TeXPage-style output/outline keep the source usable', 
   await expect(page.getByTestId('pdf-empty')).toBeVisible();
   await expect(page.getByTestId('browser-compile-log')).toBeHidden();
 });
+
+test('failed PDF lazy loading preserves the editor and provides native preview', async ({ page }) => {
+  const manifests = Array.from({length:12},(_,i)=>'\\ProvidesPackage{fixture'+i+'}').join('\n');
+  await page.route(/texlive-.*\.txt$/, r => r.fulfill({body:manifests}));
+  await page.route(/busytex-cache\.mjs$/, r=>r.fulfill({contentType:'text/javascript',body:'export async function prepareBusyTeXCache(){return {coreCached:true}};export async function getBusyTeXCacheStatus(){return {coreCached:true}}'}));
+  await page.route(/busytex-lib\.mjs$/, r=>r.fulfill({contentType:'text/javascript',body:`export class BusyTexRunner{async initialize(){}terminate(){}}; class Engine{async compile(){return {success:true,pdf:new TextEncoder().encode('%PDF-1.4\\n'),logs:[]}}}; export {Engine as XeLatex,Engine as PdfLatex,Engine as LuaLatex};`}));
+  await page.route(/\/PdfPane-[^/]+\.js$/, r=>r.abort());
+  await page.goto('/?local=1');
+  await page.getByTestId('browser-compile').click();
+  await expect(page.locator('.browser-aldine__status-text')).toContainText('编译成功');
+  await page.getByRole('combobox',{name:'PDF 预览模式'}).selectOption('pdfjs');
+  await expect(page.getByTestId('pdf-fallback')).toBeVisible();
+  await expect(page.locator('.cm-content')).toBeVisible();
+  await expect(page.getByTestId('open-projects')).toBeEnabled();
+});
