@@ -107,18 +107,18 @@ test('failed PDF lazy loading preserves the editor and provides native preview',
 });
 
 test('local compile shows elapsed ETA and recovers exit-code-zero with no PDF', async ({ page }) => {
-  const packages = Array.from({length:12},(_,i)=>'\\\\ProvidesPackage{fixture'+i+'}').join('\\n');
-  await page.route(/texlive-.*\\.txt$/, r => r.fulfill({contentType:'text/plain',body:packages}));
-  await page.route(/busytex-cache\\.mjs(?:\\?.*)?$/, r => r.fulfill({contentType:'text/javascript',body:
+  const packages = Array.from({length:12},(_,i)=>'\\ProvidesPackage{fixture'+i+'}').join('\n');
+  await page.route(/texlive-.*\.txt$/, r => r.fulfill({contentType:'text/plain',body:packages}));
+  await page.route(/busytex-cache\.mjs(?:\?.*)?$/, r => r.fulfill({contentType:'text/javascript',body:
     'export async function prepareBusyTeXCache(){return {coreCached:true}};export async function getBusyTeXCacheStatus(){return {coreCached:true}}'}));
-  await page.route(/busytex-lib\\.mjs(?:\\?.*)?$/, r => r.fulfill({contentType:'text/javascript',body:`
+  await page.route(/busytex-lib\.mjs(?:\?.*)?$/, r => r.fulfill({contentType:'text/javascript',body:`
     export class BusyTexRunner {async initialize(){}terminate(){}}
     class Engine {
       async compile(options) {
         window.__compileAttempts = [...(window.__compileAttempts || []), options.rerun];
         await new Promise(resolve=>setTimeout(resolve, options.rerun ? 3000 : 150));
         if (options.rerun) return {success:true, exitCode:0, logs:[]};
-        return {success:true, exitCode:0, pdf:new TextEncoder().encode('%PDF-1.4\\\\nrecovered'), logs:[]};
+        return {success:true, exitCode:0, pdf:new TextEncoder().encode('%PDF-1.4\\nrecovered'), logs:[]};
       }
     }
     export {Engine as XeLatex, Engine as PdfLatex, Engine as LuaLatex};
