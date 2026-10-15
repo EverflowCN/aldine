@@ -12,6 +12,7 @@ import { latex } from 'codemirror-lang-latex';
 // minus its mandatory WebSocket/Yjs backend dependency.
 interface Props {
   path: string;
+  jump?: { line: number; tick: number };
   value: string;
   onChange(value: string): void;
   onCompile(): void;
@@ -30,7 +31,7 @@ const theme = EditorView.theme({
   '.cm-tooltip': { backgroundColor: 'var(--bg-panel)', color: 'var(--text)', border: '1px solid var(--hairline)' },
   '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: 'var(--accent-fill)', color: 'var(--on-accent)' },
 });
-export default function OfflineCodePane({ path, value, onChange, onCompile }: Props) {
+export default function OfflineCodePane({ path, value, jump, onChange, onCompile }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -69,5 +70,12 @@ export default function OfflineCodePane({ path, value, onChange, onCompile }: Pr
     if (!instance || instance.state.doc.toString() === value) return;
     instance.dispatch({ changes: { from: 0, to: instance.state.doc.length, insert: value } });
   }, [value]);
+  useEffect(() => {
+    const instance = view.current;
+    if (!instance || !jump) return;
+    const line = instance.state.doc.line(Math.min(instance.state.doc.lines, Math.max(1, jump.line)));
+    instance.dispatch({ selection: { anchor: line.from }, effects: EditorView.scrollIntoView(line.from, { y: 'center' }) });
+    instance.focus();
+  }, [jump]);
   return <div ref={host} className="code-pane" data-testid="code-pane" />;
 }

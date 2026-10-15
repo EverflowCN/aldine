@@ -5,7 +5,7 @@ describe('BusyTeX Chinese compilation diagnosis', () => {
   it('identifies a TeX Live package missing from Basic', () => {
     const x = diagnoseCompileLog("! LaTeX Error: File 'multirow.sty' not found.\nEmergency stop.");
     expect(x.some(i => i.code === 'missing-file' && i.title.includes('multirow.sty'))).toBe(true);
-    expect(x.find(i => i.code === 'missing-file')?.advice).toContain('扩展');
+    expect(x.find(i => i.code === 'missing-file')?.advice).toContain('TeX Live');
   });
   it('distinguishes missing project PNG from a missing package', () => {
     const x = diagnoseCompileLog("File 'figures/diagram.png' not found");
@@ -20,6 +20,11 @@ describe('BusyTeX Chinese compilation diagnosis', () => {
   it('classifies timeout, memory and undefined command separately', () => {
     const x = diagnoseCompileLog('Compilation timeout 900000ms\nmemory access out of bounds\n! Undefined control sequence.');
     expect(x.map(i => i.code)).toEqual(expect.arrayContaining(['timeout','memory','undefined-command']));
+  });
+  it('recognizes PGF internal code as a TeX Live dependency', () => {
+    const x = diagnoseCompileLog("! I can't find file `pgfmathfloat.code.tex'.");
+    expect(x[0].advice).toContain('宏包内部依赖');
+    expect(x[0].advice).not.toContain('ZIP');
   });
   it('returns empty for a valid build', () => {
     expect(diagnoseCompileLog('Output written on main.pdf (58 pages).')).toEqual([]);

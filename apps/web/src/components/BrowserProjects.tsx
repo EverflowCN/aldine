@@ -18,7 +18,7 @@ export default function BrowserProjects(props: Props) {
           else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
         }
       }}>
-      <header><div><h2 id="browser-projects-title">我的工程</h2><p>上传记录与编辑内容保存在当前浏览器</p></div><button className="btn" disabled={props.pending} onClick={props.onClose}>返回编辑器</button></header>
+      <header><div><h2 id="browser-projects-title">Everflow · 我的工程</h2><p>上传记录与编辑内容保存在当前浏览器</p></div><button className="btn" disabled={props.pending} onClick={props.onClose}>返回编辑器</button></header>
       <div className="browser-projects-body">
         <nav aria-label="工程分类">
           <button className="btn btn--primary" disabled={props.pending} onClick={props.onUpload}>上传 ZIP 工程</button>

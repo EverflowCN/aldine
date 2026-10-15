@@ -21,9 +21,9 @@ export function diagnoseCompileLog(log: string): CompileIssue[] {
   for (const match of matches.slice(0, 12)) {
     const file = match[1].replace(/[.,;:]+$/, '');
     add('missing-file', 'error', '缺少文件：' + file,
-      /\.(?:png|jpe?g|pdf|tex)$/i.test(file)
+      /\.(?:png|jpe?g|pdf)$/i.test(file) || (/\.tex$/i.test(file) && !/\.(?:code|def|cfg)\.tex$/i.test(file))
         ? '先检查工程 ZIP 内的相对路径、主文件以及图片/章节是否完整。'
-        : '检查「本地宏包」档位：基础 → 推荐 → 扩展；仍找不到时开启按需获取宏包。');
+        : '这是 TeX Live 宏包内部依赖。编译前会自动核对资源档位；若仍缺失，请重新加载编译资源后重试，不必修改工程引用路径。');
   }
   const fonts = [
     ...text.matchAll(/(?:The\s+font|font)\s+["`']([^"'`\r\n]{2,100})["`']\s+(?:cannot\s+be\s+found|not\s+found)/gi),

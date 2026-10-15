@@ -134,7 +134,7 @@ export default function BrowserWorkspace() {
   const [selectedFolder, setSelectedFolder] = useState('');
   const folderUploadRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
-  const [showProjects, setShowProjects] = useState(false);
+  const [showProjects, setShowProjects] = useState(() => new URLSearchParams(location.search).get('local') !== '1');
   const [projectRecords, setProjectRecords] = useState<ProjectRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState('正在读取本地工程…');
@@ -157,6 +157,7 @@ export default function BrowserWorkspace() {
   const [coverage, setCoverage] = useState<TeXLiveCoverage | null>(null);
   const [coverageState, setCoverageState] = useState('尚未查询本站 TeX Live 资源目录。');
   const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [jump, setJump] = useState<{ line: number; tick: number }>();
   const [zoom, setZoom] = useState(1);
   // PDF.js can omit subset-embedded Chinese CID glyphs (e.g. FandolSong).
   // Chromium/Edge native PDFium is the safer default for XeLaTeX CJK output.
@@ -172,6 +173,7 @@ export default function BrowserWorkspace() {
   const cacheSetup = useRef<Promise<any> | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const zipRef = useRef<HTMLInputElement>(null);
+  const runnerBundles = useRef('');
   const runnerRef = useRef<BusyRunner | null>(null);
   const engineRef = useRef<Record<Engine, BusyCompiler> | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -190,6 +192,7 @@ export default function BrowserWorkspace() {
         setActive(stored.rootFile);
       }
       setState(stored ? '本地工程已恢复。' : '新建本地工程。');
+      void listProjects().then(setProjectRecords).catch(() => {});
       setReady(true);
     }).catch((err: unknown) => {
       if (cancelled) return;
@@ -483,12 +486,31 @@ export default function BrowserWorkspace() {
     if (!main || !isText(main)) { setState('请选择有效的 .tex 主文件。'); return; }
     setBusy(true);
     setCompileStatus('compiling');
+    setShowPreflight(false);
     setShowLog(true);
     setState('正在检查编译资源缓存…');
     setErrorLog('');
     setCompileIssues([]);
     const started = performance.now();
     try {
+      const report = scanLatexDependencies(workspace.files, workspace.rootFile);
+      let effectiveTier = resourceTier;
+      try {
+        const required = await assessTeXLiveCoverage(report.packages, BUSYTEX_ASSETS, workspace.files.map(f => f.path));
+        const ranks = { basic: 0, recommended: 1, extra: 2 };
+        if (ranks[required.suggested] > ranks[effectiveTier]) effectiveTier = required.suggested;
+      } catch { /* A failed metadata request must not block an offline compile. */ }
+      const bundles = effectiveTier === 'extra'
+        ? [BUSYTEX_ASSETS + '/texlive-recommended.js', BUSYTEX_ASSETS + '/texlive-extra.js']
+        : effectiveTier === 'recommended' ? [BUSYTEX_ASSETS + '/texlive-recommended.js'] : [];
+      if (effectiveTier !== resourceTier) {
+        setResourceTier(effectiveTier);
+        try { localStorage.setItem('everflow.busytex.resourceTier', effectiveTier); } catch {}
+      }
+      const signature = bundles.join('|');
+      if (runnerRef.current && runnerBundles.current !== signature) {
+        runnerRef.current.terminate(); runnerRef.current = null; engineRef.current = null;
+      }
       if (!runnerRef.current || !engineRef.current) {
         // Dynamic import intentionally points to the static library built from our fork.
         const libPath = BUSYTEX_MODULE;
@@ -504,11 +526,12 @@ export default function BrowserWorkspace() {
         const runner = new lib.BusyTexRunner({
           busytexBasePath: BUSYTEX_ASSETS,
           engineMode: 'combined',
-          preloadDataPackages: [BUSYTEX_ASSETS + '/texlive-basic.js'],
+          preloadDataPackages: [BUSYTEX_ASSETS + '/texlive-basic.js', ...bundles],
           onDownloadProgress: (p: { percent: number }) => setState('正在准备 TeX Live：' + p.percent + '%')
         }) as BusyRunner;
         try { await runner.initialize(true); }
         catch (e) { runner.terminate(); throw e; }
+        runnerBundles.current = signature;
         runnerRef.current = runner;
         engineRef.current = {
           xelatex: new lib.XeLatex(runner),
@@ -523,18 +546,6 @@ export default function BrowserWorkspace() {
       ).catch(() => {});
       setState('编译中：' + workspace.engine + '（计算在你的浏览器内进行；大型工程允许更长编译时间）…');
       const others = workspace.files.filter((f) => f.path !== workspace.rootFile);
-      // The pinned bundles are served by zuotiben.top itself via GitHub Pages.
-      // The original on-demand remote endpoint remains an optional fallback for
-      // packages outside TeX Live Basic/Recommended/Extra.
-      const bundles = resourceTier === 'extra'
-        ? [BUSYTEX_ASSETS + '/texlive-recommended.js', BUSYTEX_ASSETS + '/texlive-extra.js']
-        : resourceTier === 'recommended'
-          ? [BUSYTEX_ASSETS + '/texlive-recommended.js'] : [];
-      if (bundles.length) setState(
-        resourceTier === 'extra'
-          ? '正在加载 GitHub 托管的推荐与扩展宏包（首次约 528 MB，仅当前设备下载）…'
-          : '正在加载 GitHub 托管的推荐宏包（首次约 192 MB，仅当前设备下载）…'
-      );
       // BusyTeX's default 180-second worker watchdog killed the private
       // Everflow preamble even when the worker had not crashed. Its existing
       // compileTimeoutMs option supports up to 15 minutes. Extend the deadline
@@ -588,6 +599,7 @@ export default function BrowserWorkspace() {
       previewRef.current = url;
       setPreviewUrl(url);
       setCompileStatus('ok');
+      setShowLog(false);
       setState('编译成功，耗时 ' + ((performance.now() - started) / 1000).toFixed(1) + ' 秒（含资源加载）。');
     } catch (err: unknown) {
       setCompileStatus('error');
@@ -605,6 +617,7 @@ export default function BrowserWorkspace() {
 
   const current = workspace.files.find((f) => f.path === active);
   const textFile = current && isText(current) ? current : null;
+  const outline = textFile ? [...textFile.content.matchAll(/^\s*\\(part|chapter|section|subsection|subsubsection)\*?(?:\[[^\]]*\])?\{([^}]+)\}/gm)].map(m => ({ title: m[2], level: ['part','chapter','section','subsection','subsubsection'].indexOf(m[1]), line: textFile.content.slice(0, m.index).split('\n').length })) : [];
   const lineCount = textFile ? textFile.content.split('\n').length : 0;
   const localReady = ready && !unsaved;
   const changePdfWidth = (w: number) => setPdfWidth(clampPdf(w));
@@ -614,11 +627,10 @@ export default function BrowserWorkspace() {
     try { localStorage.setItem('aldine.local.pdfRenderer', renderer); } catch { /* private mode */ }
   };
   return (
-    <div className="editor-shell browser-aldine" data-testid="editor-shell">
-      {/* Keep Aldine's toolbar, panes, CodeMirror editor and PDF renderer native.
-          Only the storage/compile transport is swapped from Fastify to IndexedDB+BusyTeX. */}
+    <div className={"editor-shell browser-aldine" + (showProjects ? " browser-aldine--home" : "")} data-testid="editor-shell">
+      <div className="browser-aldine__editing" hidden={showProjects}>
       <header className="toolbar browser-aldine__toolbar">
-        <a className="btn btn--ghost" href="/paper/" title="返回做题本" aria-label="返回做题本"><IconChevronLeft /></a>
+        <button className="btn btn--ghost" onClick={() => void showProjectList()} title="返回工程列表" aria-label="返回工程列表"><IconChevronLeft /></button>
         <button className="btn" type="button" data-testid="open-projects" disabled={!ready || busy} onClick={() => void showProjectList()}>我的工程</button>
         <input className="toolbar__name browser-aldine__project" value={workspace.name}
           aria-label="项目名称" onChange={(e) => update({ name: e.target.value.slice(0, 100) })} />
@@ -702,13 +714,19 @@ export default function BrowserWorkspace() {
                 {workspace.files.filter((file) => /\.tex$/i.test(file.path) && isText(file)).map((file) =>
                   <option key={file.path} value={file.path}>{file.path}</option>)}
               </select>
+              <details><summary>更多编译设置</summary>
               <label className="browser-aldine__package-toggle">
                 <input type="checkbox" checked={allowPackages} onChange={(e) => setAllowPackages(e.target.checked)} />
                 自动获取缺失宏包
               </label>
               <p>编译引擎和基础／推荐／扩展宏包来自本站 GitHub Pages。选择较大资源包会增加下载和内存占用，超出这些资源包的字体或宏包仍需按需联网；完整 TeX Live 尚未离线镜像。工程只存储在本机浏览器，请定期导出 ZIP。</p>
+              </details>
             </div>
           </div>
+          <section className="browser-aldine__outline" data-testid="file-outline" aria-label="文件大纲">
+            <h3>文件大纲</h3>
+            {outline.length ? outline.map((item, i) => <button key={i} className="btn btn--ghost" style={{ paddingLeft: 12 + Math.max(0, item.level - 2) * 12 }} onClick={() => setJump({line: item.line, tick: Date.now()})}>{item.title}</button>) : <p>当前文件没有章节标题</p>}
+          </section>
         </aside>
 
         <main className="pane pane--editor browser-aldine__source">
@@ -720,9 +738,9 @@ export default function BrowserWorkspace() {
               current.path.split('/').pop() || 'main.tex')}>下载文件</button>}
             <span className="pdf-status">{lineCount} 行</span>
           </div>
-          {textFile
+          {textFile && !showProjects
             ? <Suspense fallback={<div className="browser-editor-loading">正在准备编辑器…</div>}><OfflineCodePane key={active} path={active} value={textFile.content}
-                onChange={(value) => updateFile(active, value)} onCompile={() => void compile()} /></Suspense>
+                jump={jump} onChange={(value) => updateFile(active, value)} onCompile={() => void compile()} /></Suspense>
             : <div className="pdf-empty"><p>{current ? '二进制资源不能直接编辑，可在编译时引用。' : '选择文件开始编辑。'}</p></div>}
         </main>
 
@@ -755,7 +773,10 @@ export default function BrowserWorkspace() {
 
         <section className="pane pane--preview browser-aldine__preview" style={{ width: pdfWidth, flex: 'none' }}>
           <div className="pane__header browser-aldine__preview-head">
-            <span className="pane__title">PDF 预览</span>
+            <div className="browser-aldine__output-tabs" role="tablist" aria-label="编译输出">
+              <button role="tab" aria-selected={!showLog} className="btn btn--small" onClick={() => setShowLog(false)}>PDF</button>
+              <button role="tab" aria-selected={showLog} className="btn btn--small" onClick={() => {setShowLog(true); setShowPreflight(false);}}>日志 {compileIssues.length ? compileIssues.length : ''}</button>
+            </div>
             <span className="pdf-status">
               {compileStatus === 'compiling' ? '编译中' : compileStatus === 'ok' ? '已编译' : compileStatus === 'error' ? '编译失败' : '尚未编译'}
             </span>
@@ -777,6 +798,7 @@ export default function BrowserWorkspace() {
               download={(workspace.name || 'everflow').replace(/[\\/:*?"<>|]/g, '-') + '.pdf'}>下载 PDF</a>}
             <button className="btn btn--ghost btn--small" onClick={() => setShowLog((v) => !v)}>日志</button>
           </div>
+          <div className="browser-aldine__pdf-content" hidden={showLog}>
           {!previewUrl ? <div className="browser-ws__empty" data-testid="pdf-empty"><strong>{compileStatus === 'compiling' ? '正在编译…' : 'PDF 预览'}</strong><span>点击编译后在此查看 PDF</span></div>
             : pdfRenderer === 'native' ? <iframe key={previewUrl} className="browser-aldine__native-pdf"
                 title="浏览器原生 PDF 预览（兼容中文嵌入字体）" data-testid="pdf-native" src={previewUrl} />
@@ -787,6 +809,24 @@ export default function BrowserWorkspace() {
               中文文字由浏览器 PDF 内核渲染。如果当前浏览器仍不显示，请点击「下载 PDF」使用系统阅读器。
             </div>
           )}
+          </div>
+      {showLog && <section className="browser-aldine__log-panel" aria-label="编译日志">
+        <div className="pane__header">
+          <strong>编译日志</strong>
+          <span className="toolbar__spacer" />
+          <button className="btn btn--ghost btn--small" onClick={() => setShowLog(false)}>收起</button>
+        </div>
+        {compileIssues.length > 0 && <div className="browser-aldine__diagnostics" data-testid="compile-issues">
+          <strong>诊断提示（依据编译日志推断）</strong>
+          <button className="btn btn--small" disabled={busy} data-testid="retry-compile" onClick={() => { runnerRef.current?.terminate(); runnerRef.current = null; engineRef.current = null; void compile(); }}>重新初始化并编译</button>
+          {compileIssues.map((issue, i) => <div key={i}
+              className={'browser-aldine__diagnostic browser-aldine__diagnostic--' + issue.level}>
+              <b>{issue.level === 'error' ? '错误' : '注意'} · {issue.title}</b>
+              <span>{issue.advice}</span>
+            </div>)}
+        </div>}
+        <pre data-testid="browser-compile-log">{errorLog || '尚无编译日志。'}</pre>
+      </section>}
         </section>
       </div>
       {showPreflight && preflight && <section className="browser-aldine__preflight" data-testid="preflight-panel">
@@ -844,23 +884,8 @@ export default function BrowserWorkspace() {
           <p>说明：静态扫描不代表宏包或字体已经安装；是否支持 XeLaTeX、中文、TikZ 和完整页数，必须用 BusyTeX 实际编译检验。</p>
         </div>
       </section>}
-      {showLog && <section className="browser-aldine__log-panel" aria-label="编译日志">
-        <div className="pane__header">
-          <strong>编译日志</strong>
-          <span className="toolbar__spacer" />
-          <button className="btn btn--ghost btn--small" onClick={() => setShowLog(false)}>收起</button>
-        </div>
-        {compileIssues.length > 0 && <div className="browser-aldine__diagnostics" data-testid="compile-issues">
-          <strong>诊断提示（依据编译日志推断）</strong>
-          {compileIssues.map((issue, i) => <div key={i}
-              className={'browser-aldine__diagnostic browser-aldine__diagnostic--' + issue.level}>
-              <b>{issue.level === 'error' ? '错误' : '注意'} · {issue.title}</b>
-              <span>{issue.advice}</span>
-            </div>)}
-        </div>}
-        <pre data-testid="browser-compile-log">{errorLog || '尚无编译日志。'}</pre>
-      </section>}
-      {showProjects && <BrowserProjects records={projectRecords} current={workspace.projectId} pending={busy}
+      </div>
+      {showProjects && <BrowserProjects records={projectRecords} current={workspace.projectId} pending={busy || !ready}
         onClose={() => setShowProjects(false)} onUpload={() => zipRef.current?.click()} onNew={() => void newProject()}
         onOpen={id => void openSavedProject(id)} onZip={id => void downloadOriginal(id)} onDeleteZip={id => void eraseZip(id)}
         onTrash={id => void trashProject(id)} onRestore={id => void projectAction(async () => { await setProjectStatus(id, 'active'); })}

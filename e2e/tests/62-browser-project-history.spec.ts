@@ -67,3 +67,26 @@ test('local startup does not request collaboration, PDF.js or TeX runtime bundle
   const stats=await page.evaluate(()=>({navigation:performance.getEntriesByType('navigation').map(n=>({domContentLoaded:(n as PerformanceNavigationTiming).domContentLoadedEventEnd})),scripts:performance.getEntriesByType('resource').filter(r=>r.name.endsWith('.js')).map(r=>({bytes:(r as PerformanceResourceTiming).decodedBodySize}))}));
   console.log('Local startup measurement',JSON.stringify(stats));
 });
+
+test('dashboard entry and TeXPage-style output/outline keep the source usable', async ({ page }) => {
+  await page.goto('/?local=1');
+  await expect(page.getByTestId('browser-compile')).toBeEnabled();
+  await page.getByTestId('open-projects').click();
+  await expect(page.getByTestId('project-history')).toBeVisible();
+  await expect(page.locator('.cm-content')).toHaveCount(0);
+  await page.getByRole('button', {name:'返回编辑器'}).click();
+  await page.locator('.cm-content').fill('\\documentclass{article}\n\\begin{document}\n\\section{第一章}\nText\n\\subsection{第二节}\nMore\n\\end{document}');
+  const outline = page.getByTestId('file-outline');
+  await expect(outline.getByRole('button', {name:'第一章'})).toBeVisible();
+  await outline.getByRole('button', {name:'第二节'}).click();
+  await expect(page.locator('.cm-content')).toBeFocused();
+  const tabs = page.getByRole('tablist', {name:'编译输出'});
+  await tabs.getByRole('tab', {name:/日志/}).click();
+  await expect(page.getByTestId('browser-compile-log')).toBeVisible();
+  const source = await page.locator('.browser-aldine__source').boundingBox();
+  const log = await page.getByTestId('browser-compile-log').boundingBox();
+  expect(log!.x).toBeGreaterThan(source!.x + source!.width - 2);
+  await tabs.getByRole('tab', {name:'PDF',exact:true}).click();
+  await expect(page.getByTestId('pdf-empty')).toBeVisible();
+  await expect(page.getByTestId('browser-compile-log')).toBeHidden();
+});

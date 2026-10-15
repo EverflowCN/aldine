@@ -23,7 +23,7 @@ async function manifests(basePath: string): Promise<Array<Map<string, boolean>>>
   const key = basePath.replace(/\/+$/, '');
   if (!manifestPromise) {
     manifestPromise = Promise.all(COLLECTIONS.map(async (coll) => {
-      const response = await fetch(key + '/' + coll.file, { cache: 'force-cache' });
+      const response = await fetch(key + '/' + coll.file, { cache: 'force-cache', signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw Error(coll.file + ': HTTP ' + response.status);
       const text = await response.text();
       const catalog = new Map<string, boolean>();
@@ -52,7 +52,7 @@ export async function assessTeXLiveCoverage(
   let everflowFiles = new Map<string, TeXLiveTier>();
   if (localPaths.some(p => /^Everflow-(Exam|Book|Public)\.tex$/i.test(p.split('/').pop() || ''))) {
     try {
-      const response = await fetch('/latex/deploy/everflow-package-coverage.json', { cache: 'no-store' });
+      const response = await fetch('/latex/deploy/everflow-package-coverage.json', { cache: 'no-store', signal: AbortSignal.timeout(10000) });
       if (response.ok) {
         const index = await response.json() as { source_lists?: string[]; packages?: Array<{name: string; tier: TeXLiveTier}> };
         if (index.source_lists?.includes('TeX Live installed filenames') && Array.isArray(index.packages)) {

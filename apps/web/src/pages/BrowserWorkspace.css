@@ -186,3 +186,35 @@
 .browser-projects-current{font-size:10px;font-weight:500;border:1px solid var(--hairline);padding:2px 4px;border-radius:4px;margin-left:6px;color:var(--text-2)}
 .browser-projects-row-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:170px}.browser-projects-empty{padding:70px 20px;text-align:center;color:var(--text-2);font-size:14px}
 @media(max-width:760px){.browser-projects-backdrop{padding:8px}.browser-projects{height:94vh}.browser-projects header{padding:16px}.browser-projects-body{flex-direction:column}.browser-projects nav{width:auto;border-right:0;border-bottom:1px solid var(--hairline);padding:10px;flex-direction:row;flex-wrap:wrap}.browser-projects nav small{margin:0;font-size:11px}.browser-projects-tools{padding:12px;flex-wrap:wrap}.browser-projects-tools input{font-size:16px}.browser-projects th,.browser-projects td{padding:10px}.browser-projects-tools span{width:100%}}
+
+/* TeXPage-style dashboard and three-column workspace. */
+.browser-aldine__editing{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.browser-aldine__editing[hidden],.browser-aldine__pdf-content[hidden]{display:none}
+.browser-aldine--home .browser-projects-backdrop{padding:0;background:var(--bg-app)}
+.browser-projects-backdrop{padding:0;background:var(--bg-app)}
+.browser-projects{width:100%;height:100dvh;border:0;border-radius:0;box-shadow:none;--bg-panel:#fff;--bg-inset:#f5f7fa;--text:#263449;--text-2:#68768a;--hairline:#e1e6ed;--accent:#2a5d9f;--accent-soft:#eaf0f8;--accent-fill:#244b79;--on-accent:#fff;background:#fff;color:var(--text)}
+.browser-projects header{min-height:70px;padding:15px 34px;background:#fff}
+.browser-projects h2{font-size:20px;font-weight:650;margin:0}.browser-projects header p{margin-top:5px}
+.browser-projects nav{width:230px;background:#f7f9fc;padding:28px 20px;gap:12px}
+.browser-projects nav>.btn{min-height:38px;border-radius:6px;font-size:13px}.browser-projects nav>.btn--primary{border-radius:22px;background:#244b79;color:#fff}
+.browser-projects section{padding:20px clamp(16px,3vw,48px)}
+.browser-projects-tools{border:0;padding:10px 0 24px;flex-direction:row-reverse}.browser-projects-tools input{flex:0 1 290px;background:#fff}.browser-projects-tools span{margin-right:auto}
+.browser-projects-table{border:1px solid var(--hairline);border-radius:8px}.browser-projects th{background:#f9fafc}.browser-projects td{padding-top:21px;padding-bottom:21px}.browser-projects-name{font-size:14px;font-weight:600}
+.browser-aldine__toolbar{min-height:44px;padding:5px 10px;gap:7px}
+.browser-aldine__info{min-height:25px;padding:3px 12px;font-size:11px}.browser-aldine__mode{display:none}
+.browser-aldine__workspace .sidebar{width:245px;background:var(--bg-inset);display:flex;flex-direction:column}
+.browser-aldine__workspace .sidebar--hidden{display:none}
+.browser-aldine__workspace .sidebar__body{flex:1;min-height:100px}
+.browser-aldine__outline{flex:0 1 30%;min-height:100px;max-height:30vh;overflow:auto;border-top:1px solid var(--hairline);padding:7px 0}
+.browser-aldine__outline h3{font-size:12px;margin:0 12px 7px;font-weight:600}.browser-aldine__outline p{font-size:11px;margin:10px 12px;color:var(--text-2)}
+.browser-aldine__outline button{display:block;width:100%;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;height:28px}
+.browser-aldine__settings{display:block;padding:9px 11px}.browser-aldine__settings summary{cursor:pointer;font-size:12px}.browser-aldine__settings[open]{display:flex}.browser-aldine__settings[open] summary{margin-bottom:6px}
+.browser-aldine__source{--bg-panel:#fff;--text:#263449;--text-2:#6c7887;--hairline:#dfe4ea;--syn-command:#215eaa;--syn-comment:#77867c;--syn-string:#396d51;--syn-value:#9056a1;--selection:#d9e9ff;background:#fff;color:var(--text)}
+.browser-aldine__source .cm-gutters{background:#f5f7fa;color:#929caa;border-right:1px solid #e5e9ef}.browser-aldine__source .cm-activeLine,.browser-aldine__source .cm-activeLineGutter{background:#edf3fa}
+.browser-aldine__pdf-content{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;background:#687481}
+.browser-aldine__output-tabs{display:flex;height:100%;gap:4px}.browser-aldine__output-tabs [aria-selected=true]{border-bottom:2px solid var(--accent);border-radius:0;color:var(--text)}
+.browser-aldine__preview .browser-aldine__log-panel{flex:1;min-height:0;max-height:none;border:0}.browser-aldine__preview .browser-aldine__log-panel .pane__header{display:none}.browser-aldine__preview .browser-aldine__diagnostics{max-height:40%;min-height:0}
+.browser-aldine__preview-head{gap:5px;flex-wrap:wrap;height:auto;min-height:37px;padding:3px 8px}.browser-aldine__preview-mode>span{display:none}
+.browser-aldine__preflight{position:absolute;right:0;bottom:0;width:min(650px,calc(100vw - 250px));z-index:20;max-height:55vh;box-shadow:0 -6px 24px #0003}
+@media(max-width:1050px){.browser-aldine__toolbar{gap:4px}.browser-aldine__tool-label,.browser-aldine__branch{display:none}.browser-aldine__project{flex-basis:130px;width:130px}.browser-aldine__workspace .sidebar{width:215px}}
+@media(max-width:760px){.browser-projects nav{width:auto;padding:10px}.browser-projects section{padding:10px}.browser-projects header{padding:14px 16px}.browser-projects-tools{flex-wrap:wrap;padding:4px 0 14px}.browser-projects-tools input{flex:1}.browser-aldine__preflight{width:100%}.browser-aldine__workspace .sidebar{width:100%}.browser-aldine__outline{max-height:140px;min-height:70px}.browser-aldine__source{min-height:45vh}.browser-aldine__preview{min-height:45vh}}
