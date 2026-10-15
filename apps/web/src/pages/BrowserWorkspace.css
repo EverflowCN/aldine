@@ -246,3 +246,10 @@
 @media (prefers-reduced-motion: reduce) {
   .browser-aldine__phase::before { animation: none; }
 }
+
+.browser-aldine__idle-eta {
+  display:inline-flex; align-items:center; white-space:nowrap;
+  padding:0 6px; font-size:11px; color:var(--text-2);
+  font-variant-numeric:tabular-nums;
+}
+@media(max-width:1100px) { .browser-aldine__idle-eta { display:none; } }
