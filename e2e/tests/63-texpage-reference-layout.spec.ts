@@ -73,10 +73,14 @@ test('TeXPage-like source toolbar SVG buttons execute actual CodeMirror edits', 
   await editor.fill('hello world');
   await page.getByRole('button',{name:'插入行间公式'}).click();
   await expect(editor).toContainText('\\[');
+  const afterInsertion = await editor.textContent();
   await page.getByRole('button',{name:'撤销'}).click();
-  await expect(editor).not.toContainText('\\[');
+  // The initial fill and formula may share one CodeMirror undo transaction.
+  // The default sample already contains a display-math delimiter, so compare
+  // full editor contents instead of testing absence of all math delimiters.
+  await expect.poll(() => editor.textContent()).not.toBe(afterInsertion);
   await page.getByRole('button',{name:'重做'}).click();
-  await expect(editor).toContainText('\\[');
+  await expect.poll(() => editor.textContent()).toBe(afterInsertion);
   await page.getByRole('button',{name:'搜索源码'}).click();
   await expect(page.locator('.cm-panel.cm-search')).toBeVisible();
 });
