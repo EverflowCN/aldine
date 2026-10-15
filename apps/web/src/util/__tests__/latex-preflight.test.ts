@@ -67,3 +67,13 @@ it('does not mislabel PGF math internals as missing files in the uploaded ZIP', 
   expect(project.packages).toContain('tikz');
   expect(project.missingLocalFiles).toEqual([]);
 });
+
+it('requires recommended resources for a CTeX document class even without a separate usepackage{ctex}', () => {
+  const result = scanLatexDependencies([
+    {path:'main.tex',content:String.raw`\documentclass[12pt]{ctexart}
+\usepackage{amsmath}
+\begin{document}中文\end{document}`},
+  ], 'main.tex');
+  expect(result.documentClasses).toContain('ctexart');
+  expect(result.recommendedTier).toBe('recommended');
+});
