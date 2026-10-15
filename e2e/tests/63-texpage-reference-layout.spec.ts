@@ -65,3 +65,18 @@ test('TeXPage split/editor/PDF controls are functional without remounting or dow
   await expect(page.locator('.browser-aldine__preview')).toBeVisible();
   expect(loaded).toEqual([]);
 });
+
+test('TeXPage-like source toolbar SVG buttons execute actual CodeMirror edits', async ({page}) => {
+  await page.goto('/?local=1');
+  const editor=page.locator('.cm-content');
+  await expect(editor).toBeVisible();
+  await editor.fill('hello world');
+  await page.getByRole('button',{name:'插入行间公式'}).click();
+  await expect(editor).toContainText('\\[');
+  await page.getByRole('button',{name:'撤销'}).click();
+  await expect(editor).not.toContainText('\\[');
+  await page.getByRole('button',{name:'重做'}).click();
+  await expect(editor).toContainText('\\[');
+  await page.getByRole('button',{name:'搜索源码'}).click();
+  await expect(page.locator('.cm-panel.cm-search')).toBeVisible();
+});
