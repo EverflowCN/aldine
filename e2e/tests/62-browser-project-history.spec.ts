@@ -124,6 +124,9 @@ test('local compile shows elapsed ETA and recovers exit-code-zero with no PDF', 
     export {Engine as XeLatex, Engine as PdfLatex, Engine as LuaLatex};
   `}));
   await page.goto('/?local=1');
+  // Explicit cross-reference forces multi-pass; the second attempt should
+  // recover a PDF if BusyTeX's no-PDF phase returns exitCode zero.
+  await page.locator('.cm-content').fill(String.fromCharCode(92)+'documentclass{article}\n'+String.fromCharCode(92)+'begin{document}\n'+String.fromCharCode(92)+'tableofcontents\n'+String.fromCharCode(92)+'end{document}');
   await page.getByTestId('browser-compile').click();
   const eta = page.getByTestId('compile-eta');
   await expect(eta).toBeVisible();
