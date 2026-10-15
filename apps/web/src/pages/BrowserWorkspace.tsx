@@ -628,6 +628,14 @@ export default function BrowserWorkspace() {
       // ONLY for multi-file/large projects; keep simple exercises responsive.
       const complexProject = workspace.files.length >= 30
         || workspace.files.some((f) => typeof f.content === 'string' && f.content.length > 120000);
+      // For ordinary article/book/report with already-bundled macros, avoid
+      // probing a remote TeX Live fallback during file/font lookups. On slow or
+      // blocked networks those lookups can dwarf the actual nine-line compile.
+      const standardLocalOnly = effectiveTier === 'basic'
+        && report.documentClasses.length > 0
+        && report.documentClasses.every(name => /^(?:article|book|report)$/i.test(name))
+        && !report.fontNames.length && !report.missingLocalFiles.length
+        && !needsPackageCatalog(report, workspace.files.map(file => file.path));
       const options: Record<string, unknown> = {
         compileTimeoutMs: complexProject ? 15 * 60 * 1000 : undefined,
         mainTexPath: workspace.rootFile,
@@ -636,7 +644,7 @@ export default function BrowserWorkspace() {
         dataPackagesJs: bundles.length ? bundles : undefined,
         rerun: needsSecondPass(workspace.files),
         verbose: 'info',
-        remoteEndpoint: allowPackages ? PACKAGE_SERVICE : undefined
+        remoteEndpoint: allowPackages && !standardLocalOnly ? PACKAGE_SERVICE : undefined
       };
       let result = await engineRef.current[workspace.engine].compile(options);
       let recoveryNote = '';
