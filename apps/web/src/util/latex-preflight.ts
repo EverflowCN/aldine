@@ -149,7 +149,8 @@ export function scanLatexDependencies(files: PreflightFile[], rootFile: string):
   return {
     isEverflow, entrypoints: candidates.sort(), packages: packageList, documentClasses: [...classes].sort(),
     fontNames: fontList, missingLocalFiles: absent, externalCommands: [...external].sort(),
-    imageCount, recommendedTier: (isEverflow || packageList.some(x => /^(ctex|tikz|fontawesome5|newtxmath|qrcode)$/.test(x))) ? 'recommended' : 'basic',
+    imageCount, recommendedTier: (isEverflow || [...classes].some(x => /^ctex(?:art|book|rep)$|^\s*beamer$/i.test(x)) ||
+      packageList.some(x => /^(ctex|xeCJK|fontspec|tikz|fontawesome5|newtxmath|qrcode)$/i.test(x))) ? 'recommended' : 'basic',
     warnings
   };
 }
