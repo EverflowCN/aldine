@@ -222,3 +222,24 @@ test('simple project starts in Auto Basic despite stale global Recommended and b
   expect(result.reruns).toEqual([false]);
   expect(paths).toEqual([]);
 });
+
+test('cached WASM still pays engine startup; ETA and final report separate startup from typesetting', async ({page}) => {
+  await page.route(/busytex-cache\.mjs(?:\?.*)?$/, route => route.fulfill({contentType:'text/javascript',body:
+    'export async function prepareBusyTeXCache(){return {coreCached:true}};export async function getBusyTeXCacheStatus(){return {coreCached:true}}'}));
+  const mocked = [
+    'export class BusyTexRunner { async initialize(){await new Promise(done=>setTimeout(done,1600))} terminate(){} }',
+    'class Engine { async compile(){ await new Promise(done=>setTimeout(done,1100)); return {success:true,exitCode:0,pdf:new TextEncoder().encode("%PDF-1.4 local"),logs:[]}; } }',
+    'export {Engine as XeLatex,Engine as PdfLatex,Engine as LuaLatex};'
+  ].join('\n');
+  await page.route(/busytex-lib\.mjs(?:\?.*)?$/, route => route.fulfill({contentType:'text/javascript',body:mocked}));
+  await page.goto('/?local=1');
+  await page.getByTestId('browser-compile').click();
+  const eta=page.getByTestId('compile-eta');
+  await expect(eta).toContainText('总计');
+  await expect(eta).toContainText('本阶段');
+  await expect(eta).toContainText('资源已缓存不代表引擎已启动');
+  await expect(page.locator('.browser-aldine__status-text')).toContainText('编译成功', {timeout:15000});
+  await expect(page.locator('.browser-aldine__status-text')).toContainText('资源检查与引擎初始化');
+  await expect(page.locator('.browser-aldine__status-text')).toContainText('XeLaTeX 排版');
+  await expect(eta).toHaveCount(0);
+});
