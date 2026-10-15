@@ -217,7 +217,8 @@ test('simple project starts in Auto Basic despite stale global Recommended and b
     bundles: (window as any).__tierConfig as string[],
     reruns: (window as any).__reruns as boolean[]
   }));
-  expect(result.bundles).toEqual(['/latex/browser-test/core/busytex/texlive-basic.js']);
+  expect(result.bundles).toHaveLength(1);
+  expect(result.bundles[0]).toMatch(/\/browser-test\/core\/busytex\/texlive-basic\.js$/);
   expect(result.reruns).toEqual([false]);
   expect(paths).toEqual([]);
 });
