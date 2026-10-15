@@ -186,3 +186,35 @@ test('two consecutive local compilations use latest editor content and new PDF b
   expect(sources).toHaveLength(2);
   expect(sources[1]).toContain('SECOND-BUILD');
 });
+
+
+test('simple project starts in Auto Basic despite stale global Recommended and builds in one pass', async ({page}) => {
+  const paths: string[] = [];
+  await page.addInitScript(() => localStorage.setItem('everflow.busytex.resourceTier', 'recommended'));
+  page.on('request', req => {
+    if (/texlive-(?:recommended|extra)\.(?:data|js)|providespackage\.txt|texlive-(?:basic|recommended|extra)\.txt/.test(req.url())) paths.push(req.url());
+  });
+  await page.route(/busytex-cache\.mjs(?:\?.*)?$/, route => route.fulfill({ contentType: 'text/javascript',
+    body: 'export async function prepareBusyTeXCache(){return {coreCached:true}};export async function getBusyTeXCacheStatus(){return {coreCached:true}};' }));
+  const mock = [
+    'export class BusyTexRunner { constructor(config){ window.__tierConfig=config.preloadDataPackages; } async initialize(){} terminate(){} }',
+    'class Engine { async compile(options) {',
+    'window.__reruns = [...(window.__reruns||[]), options.rerun];',
+    'return { success:true, exitCode:0, pdf:new TextEncoder().encode("%PDF-1.4 minimal"), logs:[] };',
+    '} }',
+    'export { Engine as XeLatex, Engine as PdfLatex, Engine as LuaLatex };'
+  ].join('\n');
+  await page.route(/busytex-lib\.mjs(?:\?.*)?$/, route=>route.fulfill({ contentType:'text/javascript', body:mock }));
+  await page.goto('/?local=1');
+  await expect(page.getByRole('combobox', {name:'TeX Live 资源包'})).toHaveValue('auto');
+  await expect(page.getByTestId('precompile-eta')).toBeVisible();
+  await page.getByTestId('browser-compile').click();
+  await expect(page.locator('.browser-aldine__status-text')).toContainText('编译成功');
+  const result = await page.evaluate(() => ({
+    bundles: (window as any).__tierConfig as string[],
+    reruns: (window as any).__reruns as boolean[]
+  }));
+  expect(result.bundles).toEqual(['/latex/browser-test/core/busytex/texlive-basic.js']);
+  expect(result.reruns).toEqual([false]);
+  expect(paths).toEqual([]);
+});
