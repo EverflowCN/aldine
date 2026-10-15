@@ -171,6 +171,9 @@ export default function BrowserWorkspace() {
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [viewMode, setViewMode] = useState<'split' | 'editor' | 'pdf'>('split');
   const [jump, setJump] = useState<{ line: number; tick: number }>();
+  type EditAction = 'undo' | 'redo' | 'search' | 'comment' | 'math';
+  const [editorCommand, setEditorCommand] = useState<{ action: EditAction; path: string; tick: number }>();
+  const runEditorAction = (action: EditAction) => setEditorCommand({ action, path: active, tick: Date.now() });
   const [zoom, setZoom] = useState(1);
   // PDF.js can omit subset-embedded Chinese CID glyphs (e.g. FandolSong).
   // Chromium/Edge native PDFium is the safer default for XeLaTeX CJK output.
@@ -888,7 +891,14 @@ export default function BrowserWorkspace() {
         </aside>
 
         <main className="pane pane--editor browser-aldine__source">
-          <div className="pane__header">
+          <div className="pane__header texpage-editor__source-head">
+            <div className="texpage-editor__code-actions" role="toolbar" aria-label="LaTeX 编辑快捷工具">
+              <button type="button" aria-label="撤销" title="撤销（Ctrl+Z）" disabled={!textFile} onClick={() => runEditorAction('undo')}><TexPageIcon name="undo" /></button>
+              <button type="button" aria-label="重做" title="重做（Ctrl+Y）" disabled={!textFile} onClick={() => runEditorAction('redo')}><TexPageIcon name="redo" /></button>
+              <button type="button" aria-label="搜索源码" title="搜索源码（Ctrl+F）" disabled={!textFile} onClick={() => runEditorAction('search')}><TexPageIcon name="search" /></button>
+              <button type="button" aria-label="切换注释" title="切换行注释" disabled={!textFile} onClick={() => runEditorAction('comment')}><TexPageIcon name="hash" /></button>
+              <button type="button" aria-label="插入行间公式" title="插入行间数学公式" disabled={!textFile} onClick={() => runEditorAction('math')}><TexPageIcon name="sigma" /></button>
+            </div>
             <span className="statusbar__file" data-testid="active-file"><TexPageIcon name="code" />{active}</span>
             <span className="toolbar__spacer" />
             {current && <button className="btn btn--ghost btn--small" onClick={() => saveAs(
@@ -898,7 +908,7 @@ export default function BrowserWorkspace() {
           </div>
           {textFile && !showProjects
             ? <PaneBoundary resetKey={active} fallback={<div className="browser-editor-loading" role="alert"><p>编辑器资源已更新，请重新打开页面。</p><button className="btn" onClick={() => void flushProject().then(() => location.reload()).catch(error => setState('保存失败：' + String(error)))}>保存并重新加载</button></div>}><Suspense fallback={<div className="browser-editor-loading">正在准备编辑器…</div>}><OfflineCodePane key={active} path={active} value={textFile.content}
-                jump={jump} onChange={(value) => updateFile(active, value)} onCompile={() => void compile()} /></Suspense></PaneBoundary>
+                jump={jump} command={editorCommand} onChange={(value) => updateFile(active, value)} onCompile={() => void compile()} /></Suspense></PaneBoundary>
             : <div className="pdf-empty"><p>{current ? '二进制资源不能直接编辑，可在编译时引用。' : '选择文件开始编辑。'}</p></div>}
         </main>
 
