@@ -535,3 +535,18 @@
 .texpage-editor__more-files[open] summary svg:last-child{transform:rotate(180deg)}
 .browser-aldine__workspace .texpage-editor__more-files .browser-aldine__actions{display:flex;flex-wrap:wrap;gap:3px;padding:6px 8px 10px}
 .browser-aldine__workspace .texpage-editor__more-files .browser-aldine__actions .btn{height:25px;min-height:25px}
+
+/* Functional TeXPage-like CodeMirror command strip (no dummy toolbar actions). */
+.browser-aldine__source .texpage-editor__source-head{padding:0 5px;gap:4px}
+.texpage-editor__code-actions{display:flex;align-items:center;gap:1px;flex:none;height:31px}
+.browser-aldine__source .texpage-editor__code-actions button{height:27px;width:27px;
+  display:inline-flex;justify-content:center;align-items:center;
+  padding:0;border:0;background:transparent;color:#cad5e4;cursor:pointer;border-radius:3px}
+.browser-aldine__source .texpage-editor__code-actions button:hover:not(:disabled){background:#455165;color:#fff}
+.browser-aldine__source .texpage-editor__code-actions button:disabled{opacity:.38;cursor:default}
+.browser-aldine__source .texpage-editor__code-actions button svg{width:15px;height:15px}
+.browser-aldine__source .texpage-editor__source-head [data-testid=active-file]{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:30%;font-size:11px;
+  border-left:1px solid #4a535e;padding-left:8px;margin-left:5px}
+@media(max-width:1050px){.browser-aldine__source .texpage-editor__code-actions button{width:24px}}
+@media(max-width:760px){.browser-aldine__source .texpage-editor__source-head [data-testid=active-file]{max-width:28%}}
