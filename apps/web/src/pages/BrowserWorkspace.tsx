@@ -11,6 +11,8 @@ import { assessTeXLiveCoverage } from '../util/texlive-manifest';
 import type { TeXLiveCoverage } from '../util/texlive-manifest';
 import { diagnoseCompileLog } from '../util/latex-compile-diagnostics';
 import type { CompileIssue } from '../util/latex-compile-diagnostics';
+import { describeCompileEstimate, estimateCompileTime, formatCompileTime, historyKey, readCompileHistory, saveCompileHistory } from '../util/compile-estimate';
+import type { CompileEstimate, CompilePhase } from '../util/compile-estimate';
 import BrowserFileTree from '../components/BrowserFileTree';
 import { readZipNames, decodeProjectText, safeProjectPath, projectFolders, chooseRoot, unwrapProject, parentFolders, repairLegacyPath } from '../util/latex-project-files';
 import BrowserProjects from '../components/BrowserProjects';
@@ -176,6 +178,11 @@ export default function BrowserWorkspace() {
     catch { return 'native'; }
   });
   const [compileStatus, setCompileStatus] = useState<'idle' | 'compiling' | 'ok' | 'error'>('idle');
+  const [compileEstimate, setCompileEstimate] = useState<CompileEstimate | null>(null);
+  const [compilePhase, setCompilePhase] = useState<CompilePhase>('checking');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const startedAtRef = useRef(0);
+  const compileLock = useRef(false);
   const [pdfWidth, setPdfWidth] = useState(() => Math.max(330, Math.round(window.innerWidth * .40)));
   const [resizing, setResizing] = useState(false);
   const clampPdf = (w: number) => Math.min(Math.max(260, w), Math.max(280, window.innerWidth - (sidebarHidden ? 390 : 540)));
@@ -235,6 +242,12 @@ export default function BrowserWorkspace() {
     return cacheSetup.current;
   }
 
+  useEffect(() => {
+    if (compileStatus !== 'compiling') return;
+    const timer = window.setInterval(() => setElapsedSeconds(Math.floor((performance.now() - startedAtRef.current) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [compileStatus]);
+
   useEffect(() => () => {
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     runnerRef.current?.terminate();
@@ -246,6 +259,7 @@ export default function BrowserWorkspace() {
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     previewRef.current = null; setPreviewUrl(null); setCompileStatus('idle');
     setErrorLog(''); setCompileIssues([]); setPreflight(null); setShowPreflight(false); setShowLog(false); setJump(undefined);
+    setCompileEstimate(null); setElapsedSeconds(0);
     setWorkspace(next); setActive(next.rootFile); setSelectedFolder('');
   }
   async function flushProject(): Promise<void> {
@@ -343,7 +357,7 @@ export default function BrowserWorkspace() {
     setState('已导入 ' + next.length + ' 个文件，仅保存在当前浏览器。');
     } catch (error) {
       setState('文件导入失败：' + (error instanceof Error ? error.message : String(error)));
-    } finally { setBusy(false); }
+    } finally { compileLock.current = false; setBusy(false); }
   }
   async function importZip(input: File | undefined): Promise<void> {
     if (!input) return;
@@ -491,9 +505,16 @@ export default function BrowserWorkspace() {
   }
 
   async function compile(): Promise<void> {
-    if (busy) return;
+    if (busy || compileLock.current) return;
     const main = workspace.files.find((f) => f.path === workspace.rootFile);
     if (!main || !isText(main)) { setState('请选择有效的 .tex 主文件。'); return; }
+    compileLock.current = true;
+    const started = performance.now();
+    startedAtRef.current = started;
+    setElapsedSeconds(0);
+    setCompilePhase('checking');
+    setCompileEstimate(estimateCompileTime(workspace.files, resourceTier, Boolean(runnerRef.current),
+      readCompileHistory(historyKey(workspace.files, resourceTier))));
     setBusy(true);
     setCompileStatus('compiling');
     setShowPreflight(false);
@@ -501,7 +522,6 @@ export default function BrowserWorkspace() {
     setState('正在检查编译资源缓存…');
     setErrorLog('');
     setCompileIssues([]);
-    const started = performance.now();
     try {
       const report = scanLatexDependencies(workspace.files, workspace.rootFile);
       let effectiveTier = resourceTier;
@@ -510,6 +530,7 @@ export default function BrowserWorkspace() {
         const ranks = { basic: 0, recommended: 1, extra: 2 };
         if (ranks[required.suggested] > ranks[effectiveTier]) effectiveTier = required.suggested;
       } catch { /* A failed metadata request must not block an offline compile. */ }
+      setCompilePhase('loading');
       const bundles = effectiveTier === 'extra'
         ? [BUSYTEX_ASSETS + '/texlive-recommended.js', BUSYTEX_ASSETS + '/texlive-extra.js']
         : effectiveTier === 'recommended' ? [BUSYTEX_ASSETS + '/texlive-recommended.js'] : [];
@@ -530,9 +551,12 @@ export default function BrowserWorkspace() {
         const dataReady = typeof lib.isPackageCached === 'function'
           ? await lib.isPackageCached(BUSYTEX_ASSETS + '/texlive-basic.js').catch(() => false)
           : false;
+        setCompileEstimate(estimateCompileTime(workspace.files, effectiveTier, Boolean(status?.coreCached || dataReady),
+          readCompileHistory(historyKey(workspace.files, effectiveTier))));
+        setCompilePhase('initializing');
         setState((status?.coreCached || dataReady)
           ? '正在从本地缓存恢复 XeLaTeX 引擎（仍需初始化 WebAssembly）…'
-          : '首次加载编译资源，约 120 MB；以后优先使用浏览器缓存…');
+          : '首次加载编译资源；预计时间包含下载，实际取决于网络速度…');
         const runner = new lib.BusyTexRunner({
           busytexBasePath: BUSYTEX_ASSETS,
           engineMode: 'combined',
@@ -554,7 +578,8 @@ export default function BrowserWorkspace() {
           setCacheHint(cache.coreCached ? '编译资源已保存在本机浏览器中。' : '编译资源缓存写入中或被浏览器存储策略限制。')
         )
       ).catch(() => {});
-      setState('编译中：' + workspace.engine + '（计算在你的浏览器内进行；大型工程允许更长编译时间）…');
+      setCompilePhase('compiling');
+      setState('编译中：' + workspace.engine + '（计算在你的浏览器内进行；预计时长仅供参考）…');
       const others = workspace.files.filter((f) => f.path !== workspace.rootFile);
       // BusyTeX's default 180-second worker watchdog killed the private
       // Everflow preamble even when the worker had not crashed. Its existing
@@ -562,7 +587,7 @@ export default function BrowserWorkspace() {
       // ONLY for multi-file/large projects; keep simple exercises responsive.
       const complexProject = workspace.files.length >= 30
         || workspace.files.some((f) => typeof f.content === 'string' && f.content.length > 120000);
-      const result = await engineRef.current[workspace.engine].compile({
+      const options: Record<string, unknown> = {
         compileTimeoutMs: complexProject ? 15 * 60 * 1000 : undefined,
         mainTexPath: workspace.rootFile,
         input: main.content,
@@ -571,7 +596,17 @@ export default function BrowserWorkspace() {
         rerun: true,
         verbose: 'info',
         remoteEndpoint: allowPackages ? PACKAGE_SERVICE : undefined
-      });
+      };
+      let result = await engineRef.current[workspace.engine].compile(options);
+      let recoveryNote = '';
+      // BusyTeX can return exitCode=0 for an intermediate -no-pdf pass yet
+      // provide no final PDF. In that specific case retry a single PDF pass.
+      if (!result.pdf?.length && result.exitCode === 0) {
+        recoveryNote = '多轮编译未返回 PDF，已自动尝试一次单轮直接生成；目录/引用可能需要再次编译。';
+        setState('未收到 PDF，正在尝试单轮直接编译…');
+        result = await engineRef.current[workspace.engine].compile({ ...options, rerun: false });
+      }
+      setCompilePhase('finishing');
       // BusyTeX's top-level log can be empty even when its stage logs
       // contain the actual XeLaTeX error. Preserve stage stdout/stderr and
       // missing-font information for the LOCAL browser user only.
@@ -588,7 +623,7 @@ export default function BrowserWorkspace() {
         }
         return parts.join('\n');
       }).join('\n\n');
-      const diagnosticLog = [result.log, detailed].filter(Boolean).join('\n\n') || '(编译器未返回日志)';
+      const diagnosticLog = [recoveryNote, result.log, detailed].filter(Boolean).join('\n\n') || '(编译器未返回日志)';
       setErrorLog(diagnosticLog);
       setCompileIssues(diagnoseCompileLog(diagnosticLog));
       if (!result.success || !result.pdf?.length) {
@@ -610,7 +645,11 @@ export default function BrowserWorkspace() {
       setPreviewUrl(url);
       setCompileStatus('ok');
       setShowLog(false);
-      setState('编译成功，耗时 ' + ((performance.now() - started) / 1000).toFixed(1) + ' 秒（含资源加载）。');
+      const duration = Math.round((performance.now() - started) / 1000);
+      saveCompileHistory(historyKey(workspace.files, effectiveTier), duration);
+      setElapsedSeconds(duration);
+      setState('编译成功，耗时 ' + formatCompileTime(duration) + '（含资源加载）。' +
+        (recoveryNote ? ' 已通过单轮编译恢复 PDF；请检查目录和交叉引用。' : ''));
     } catch (err: unknown) {
       setCompileStatus('error');
       setErrorLog(err instanceof Error ? err.stack || err.message : String(err));
@@ -632,6 +671,10 @@ export default function BrowserWorkspace() {
   const localReady = ready && !unsaved;
   const changePdfWidth = (w: number) => setPdfWidth(clampPdf(w));
   const statusMessage = state;
+  const phaseName: Record<CompilePhase, string> = {
+    checking: '分析工程依赖', loading: '准备宏包资源',
+    initializing: '初始化编译器', compiling: '生成 PDF', finishing: '整理 PDF'
+  };
   const choosePdfRenderer = (renderer: 'native' | 'pdfjs') => {
     setPdfRenderer(renderer);
     try { localStorage.setItem('aldine.local.pdfRenderer', renderer); } catch { /* private mode */ }
@@ -676,11 +719,17 @@ export default function BrowserWorkspace() {
           <button className="btn btn--primary" onClick={() => void compile()} disabled={!ready || busy}
             aria-busy={busy} data-testid="browser-compile" title="浏览器 XeLaTeX 编译（Ctrl/⌘ + S）">
             {busy && <span className="spinner" />}
-            {busy ? '编译中…' : '编译'}
+            {busy ? '编译中 · ' + formatCompileTime(elapsedSeconds) : '编译'}
           </button>
         </div>
       </header>
 
+      {compileStatus === 'compiling' && compileEstimate && <div className="browser-aldine__compile-progress" role="timer" aria-label="本地编译预计时间" data-testid="compile-eta">
+        <span className="browser-aldine__phase">{phaseName[compilePhase]}</span>
+        <span>已用 {formatCompileTime(elapsedSeconds)}</span>
+        <strong>{describeCompileEstimate(compileEstimate, elapsedSeconds)}</strong>
+        <span className="browser-aldine__estimate-note">仅估算 · 首次加载/字体缓存可能较慢</span>
+      </div>}
       <div className="browser-aldine__info" role="status">
         <span className="browser-aldine__status-text" title={statusMessage}>{statusMessage}</span>
         <span className="browser-aldine__save">{localReady ? '✓ 本地已保存' : '○ 正在保存'}</span>
