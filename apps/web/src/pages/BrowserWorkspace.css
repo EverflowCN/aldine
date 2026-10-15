@@ -550,3 +550,13 @@
   border-left:1px solid #4a535e;padding-left:8px;margin-left:5px}
 @media(max-width:1050px){.browser-aldine__source .texpage-editor__code-actions button{width:24px}}
 @media(max-width:760px){.browser-aldine__source .texpage-editor__source-head [data-testid=active-file]{max-width:28%}}
+
+.texpage-editor__mobile-config{display:none}
+@media(max-width:760px){
+  .texpage-editor__mobile-config{display:flex;flex-direction:column;gap:9px;
+    padding:11px 8px 7px;border-top:1px solid #485264;margin-top:4px}
+  .texpage-editor__mobile-config label{display:flex;justify-content:space-between;
+    align-items:center;gap:9px;font-size:12px;color:#d7e0ec}
+  .texpage-editor__mobile-config select{max-width:158px;min-width:112px;border:1px solid #526174;
+    padding:4px;border-radius:4px;background:#2a303b;color:#fff;font-size:12px}
+}
